@@ -35,9 +35,15 @@ fn fixtures() -> Array[Fixture] {
       echo_impl: WIDE_FLAGS_ECHO_IMPL,
       work_dir: ".canonfuzz-work/wide-flags",
       cases: @canonfuzz.wide_flags_regression_suite(),
-      known_build_failure: Some(
-        "wit-bindgen-cli generates an extra closing parenthesis in the high-word accessor for flags with more than 32 members (wit-bindgen/wit-bindgen#1517-class defect); see README.md",
-      ),
+      known_build_failure: Some({
+        reason: "wit-bindgen-cli generates an extra closing parenthesis in the high-word accessor for flags with more than 32 members (wit-bindgen/wit-bindgen#1517-class defect); see README.md",
+        // Both markers must show up in the build's own output for a
+        // failure to count as *this* tracked issue - see the doc comment
+        // on `fingerprint_matches`. Without this check, any unrelated
+        // build failure (a moon version bump, a missing tool, a real new
+        // bug) would be silently swallowed as "known, not fatal".
+        fingerprint: ["ffi.mbt", "unexpected token `)`"],
+      }),
     },
     {
       name: "option-u32",
@@ -72,9 +78,35 @@ struct Fixture {
   work_dir : String
   cases : Array[@canonfuzz.Case]
   /// `None` if this fixture is expected to build and pass outright.
-  /// `Some(reason)` if it is currently expected to fail to build, so that
-  /// expected failure does not fail the overall run - see `run_fixture`.
-  known_build_failure : String?
+  /// `Some(known)` if it is currently expected to fail to build, so that
+  /// *that specific* failure does not fail the overall run - see
+  /// `run_fixture` and `fingerprint_matches`.
+  known_build_failure : KnownFailure?
+}
+
+///|
+struct KnownFailure {
+  reason : String
+  /// Substrings that must *all* appear in the build's actual output for a
+  /// failure to count as this tracked issue rather than something new.
+  fingerprint : Array[String]
+}
+
+///|
+/// Whether `output` looks like the specific failure `known` describes,
+/// rather than some other failure that happens to occur while building
+/// the same fixture. Requiring every fingerprint substring to appear
+/// (rather than, say, just checking that the build failed at all) is what
+/// stops an unrelated problem - a `moon` version bump, a missing tool, a
+/// real new bug in the same fixture - from being silently swallowed as
+/// "known, not fatal".
+fn fingerprint_matches(output : String, known : KnownFailure) -> Bool {
+  for marker in known.fingerprint {
+    if !output.contains(marker) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -101,13 +133,23 @@ async fn main {
 ///|
 /// Run one fixture end to end. Returns `true` if the fixture's outcome
 /// matched what was expected of it (all cases passed, or a known build
-/// failure reproduced as tracked), `false` if something needs attention.
+/// failure reproduced as tracked - XFAIL), `false` if something needs
+/// attention (an unexpected failure anywhere, or a build failure that
+/// does not match the tracked fingerprint - FAIL).
 ///
-/// A fixture whose build is expected to fail and does not fail is not
-/// treated as an error: its cases are run for real instead, since the
-/// underlying defect may have just been fixed upstream.
+/// A fixture whose build is expected to fail and does not fail is not by
+/// itself treated as an error (XPASS): its cases are run for real
+/// instead, since the underlying defect may have just been fixed
+/// upstream, and only a real case failure at that point fails the run.
 async fn run_fixture(f : Fixture) -> Bool {
   println("\n== " + f.name + " ==")
+  if @fs.exists(f.work_dir) {
+    // Remove any output left by a previous run (a different wit-bindgen
+    // version, an edited fixture, ...) before regenerating, so stale
+    // .mbt files from a since-changed layout can never get built
+    // alongside fresh ones and contaminate the result.
+    @fs.rmdir(f.work_dir, recursive=true)
+  }
   @fs.mkdir(f.work_dir, recursive=true)
   println("canonfuzz: generating guest bindings for " + f.wit_file)
   match run_wit_bindgen(f) {
@@ -119,24 +161,36 @@ async fn run_fixture(f : Fixture) -> Bool {
       write_echo_impl(f)
       println("canonfuzz: building the guest component with moon")
       match (build_guest(f), f.known_build_failure) {
-        (Some(_), Some(known_reason)) => {
-          println(
-            "canonfuzz: " +
-            f.name +
-            " build failed as expected (tracked, not a new problem)",
-          )
-          println("  tracked cause: " + known_reason)
-          true
-        }
+        (Some(actual), Some(known)) =>
+          if fingerprint_matches(actual, known) {
+            println(
+              "canonfuzz: " +
+              f.name +
+              " build failed as expected (XFAIL, tracked, not a new problem)",
+            )
+            println("  tracked cause: " + known.reason)
+            true
+          } else {
+            println(
+              "canonfuzz: " +
+              f.name +
+              " build failed, but NOT for the tracked reason (FAIL)",
+            )
+            println("  tracked cause was: " + known.reason)
+            report_early_failure("build", actual)
+            false
+          }
         (Some(reason), None) => {
           report_early_failure("build", reason)
           false
         }
-        (None, Some(known_reason)) => {
-          println("canonfuzz: " + f.name + " build UNEXPECTEDLY SUCCEEDED")
-          println("  previously tracked as a known failure: " + known_reason)
+        (None, Some(known)) => {
           println(
-            "  running its cases for real - if they all pass, the tracked issue can likely be closed",
+            "canonfuzz: " + f.name + " build UNEXPECTEDLY SUCCEEDED (XPASS)",
+          )
+          println("  previously tracked as a known failure: " + known.reason)
+          println(
+            "  ALERT: update this fixture's known_build_failure in fixtures() - running its cases for real now",
           )
           run_componentize_and_cases(f)
         }

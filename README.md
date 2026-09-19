@@ -48,14 +48,21 @@ construction rather than found by random search.
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
   when something fails before any case can even run.
-- Expected-failure tracking for a fixture whose build is currently known
-  to fail (`wide-flags`, see "A finding along the way"): that failure is
-  reported but does not fail the run, and if the build ever unexpectedly
-  *succeeds* - i.e. the underlying defect got fixed upstream - `cmd/main`
-  notices and runs the fixture's real cases instead of continuing to treat
-  it as a known failure. A regression in the other direction (a fixture
-  that is supposed to pass failing, or a supposedly-fixed one failing its
-  cases once it builds) still fails the run.
+- Fingerprinted expected-failure tracking for a fixture whose build is
+  currently known to fail (`wide-flags`, see "A finding along the way").
+  A build failure is only treated as *that* tracked issue - reported, but
+  not failing the run (XFAIL) - if the build's own output actually
+  contains the markers recorded for it; a build failure for any other
+  reason (a `moon`/`wit-bindgen` version bump, a missing tool, a genuinely
+  new bug) still fails the run (FAIL) instead of being silently absorbed.
+  If the build ever unexpectedly *succeeds* (XPASS) - i.e. the underlying
+  defect got fixed upstream - `cmd/main` says so explicitly and runs the
+  fixture's real cases instead of continuing to treat it as known-failing;
+  a real case failure at that point still fails the run.
+- Each fixture's working directory is removed before it is regenerated,
+  not just created if missing, so a `.mbt` file left over from a previous
+  `wit-bindgen` version or a since-edited `.wit` file can never linger
+  alongside freshly generated ones and change what actually gets built.
 
 The core (`value.mbt`, `wave.mbt`, `cases.mbt`) has no external
 dependency and builds on every MoonBit target. `cmd/main` requires
@@ -67,7 +74,21 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 - Only scalars, one flags type, `option<u32>`, and `result<u32, string>`.
   Records, lists, variants, enums and nested/recursive shapes are not
-  covered.
+  covered - **and adding them needs a comparator upgrade first**, not just
+  more `Value` cases. `run_case` currently compares `wasmtime`'s raw
+  output text against `render(case.expect)` byte-for-byte. That is exact
+  for everything implemented so far, because none of it has more than one
+  way to render correctly. A record has no canonical field order, and
+  floats reachable through a comparison the WAVE grammar doesn't pin down
+  a single textual form for; string comparison would then reject a
+  correct-but-differently-ordered or differently-formatted result as a
+  false "mismatch". Before a record or list fixture is added, `run_case`
+  needs one of: parsing `wasmtime`'s output back into a `Value` and
+  comparing with `same()` instead of text equality; a typed host (e.g. a
+  small Rust `wasmtime::component::bindgen!` driver) instead of
+  string-in-string-out CLI invocation; or a versioned, strictly-specified
+  rendering contract that removes the ambiguity instead of working around
+  it after the fact.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -112,7 +133,7 @@ canonfuzz: running the regression suite against the component
 == wide-flags ==
 canonfuzz: generating guest bindings for wit/wide-flags.wit
 canonfuzz: building the guest component with moon
-canonfuzz: wide-flags build failed as expected (tracked, not a new problem)
+canonfuzz: wide-flags build failed as expected (XFAIL, tracked, not a new problem)
   tracked cause: wit-bindgen-cli generates an extra closing parenthesis in
   the high-word accessor for flags with more than 32 members
   (wit-bindgen/wit-bindgen#1517-class defect); see README.md
@@ -167,12 +188,18 @@ mbt_ffi_store32((return_area) + 4, (flag >> 32).to_int()))
 outright. This is a fresh, independently reproduced instance of the same
 class of bug reported in #1517 ("flags over 32 bits mis-generate"), still
 present in the current release. `cmd/main` drives this fixture the same
-way as the scalar one, but treats its build failure as expected (see
-"What's implemented") rather than letting it fail the run - the point of
-tracking it here, rather than just skipping the fixture, is that the
-tracking itself breaks loudly (as a genuine, non-ignorable failure) the
-day `wit-bindgen` fixes this and `cmd/main` starts running the six
-`flags-*` cases in `cases.mbt` for real.
+way as the scalar one, but treats *this specific* build failure as
+expected (see "What's implemented") rather than letting it fail the run.
+The check is fingerprinted, not "did the build fail at all": the tracked
+`KnownFailure` records that both `ffi.mbt` and `` unexpected token `)` ``
+must appear in the build's own output, so a `moon` version bump, a
+missing tool, or an unrelated new bug in the same fixture would show up as
+a real failure (FAIL) rather than being absorbed as this one. The point of
+tracking the issue at all, rather than just skipping the fixture, is that
+tracking makes the day `wit-bindgen` fixes this loud rather than silent:
+the build unexpectedly succeeding (XPASS) makes `cmd/main` run the six
+`flags-*` cases in `cases.mbt` for real instead of continuing to report
+"known failure."
 
 Separately, the previously reported `s8`/`s16` corruption (#1518) did not
 reproduce against `wit-bindgen-cli` 0.62.0 for any boundary value in
