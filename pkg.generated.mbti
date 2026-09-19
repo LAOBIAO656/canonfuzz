@@ -12,6 +12,8 @@ pub fn option_u32_regression_suite() -> Array[Case]
 
 pub fn render(Value) -> String
 
+pub fn result_u32_string_regression_suite() -> Array[Case]
+
 pub fn same(Value, Value) -> Bool
 
 pub fn scalar_regression_suite() -> Array[Case]
@@ -44,8 +46,10 @@ pub enum Value {
   VF32(Float)
   VF64(Double)
   VChar(Char)
+  VString(String)
   VFlags(labels~ : Array[String], bits~ : UInt64)
   VOption(Value?)
+  VResult(Result[Value, Value])
 } derive(@debug.Debug)
 
 // Type aliases

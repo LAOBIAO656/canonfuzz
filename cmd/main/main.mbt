@@ -49,6 +49,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.option_u32_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "result-u32-string",
+      wit_file: "wit/result-u32-string.wit",
+      world: "canon-result-u32-string",
+      echo_pkg_dir: "gen/world/canon-result-u32-string",
+      echo_impl: RESULT_U32_STRING_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/result-u32-string",
+      cases: @canonfuzz.result_u32_string_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -251,6 +261,12 @@ const WIDE_FLAGS_ECHO_IMPL =
 const OPTION_U32_ECHO_IMPL =
   #|///|
   #|pub fn echo_option_u32(v : UInt?) -> UInt? { v }
+  #|
+
+///|
+const RESULT_U32_STRING_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_result(v : Result[UInt, String]) -> Result[UInt, String] { v }
   #|
 
 ///|

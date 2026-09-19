@@ -1,0 +1,5 @@
+package canonfuzz:result-u32-string@0.1.0;
+
+world canon-result-u32-string {
+    export echo-result: func(v: result<u32, string>) -> result<u32, string>;
+}

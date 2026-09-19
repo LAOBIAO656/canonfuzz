@@ -138,3 +138,45 @@ test "same compares options structurally" {
   assert_false(same(VOption(Some(VU32(1))), VOption(Some(VU32(2)))))
   assert_false(same(VOption(None), VOption(Some(VU32(0)))))
 }
+
+///|
+/// A string with nothing to escape renders as a plain double-quoted
+/// literal; the empty string still needs its quotes, since dropping them
+/// would render as no text at all rather than as a valid string literal.
+test "render renders plain strings" {
+  assert_eq(render(VString("")), "\"\"")
+  assert_eq(render(VString("hello")), "\"hello\"")
+}
+
+///|
+/// Strings share `escape`'s mandatory-escape set with chars, but `"` (not
+/// `'`) is the delimiter that must be escaped, and `'` needs no escape
+/// inside a string - the two literal forms must not cross-apply each
+/// other's escape rules.
+test "render escapes what a string literal requires" {
+  assert_eq(render(VString("say \"hi\"")), "\"say \\\"hi\\\"\"")
+  assert_eq(render(VString("back\\slash")), "\"back\\\\slash\"")
+  assert_eq(render(VString("line\nbreak")), "\"line\\nbreak\"")
+  assert_eq(render(VString("it's fine")), "\"it's fine\"")
+}
+
+///|
+/// `result` renders in explicit `ok(...)`/`err(...)` form, matching what
+/// `wasmtime run --invoke` itself prints (confirmed by hand against
+/// `wasmtime` 48.0.2, the same way as for `option` - see the note on
+/// `render` in wave.mbt).
+test "render renders results in explicit ok/err form" {
+  assert_eq(render(VResult(Ok(VU32(0)))), "ok(0)")
+  assert_eq(render(VResult(Err(VString("oops")))), "err(\"oops\")")
+}
+
+///|
+/// `same()` for results must compare payloads recursively within a
+/// matching arm and reject an `Ok`/`Err` mismatch even when the payloads
+/// would otherwise look alike.
+test "same compares results structurally" {
+  assert_true(same(VResult(Ok(VU32(1))), VResult(Ok(VU32(1)))))
+  assert_true(same(VResult(Err(VString("x"))), VResult(Err(VString("x")))))
+  assert_false(same(VResult(Ok(VU32(1))), VResult(Ok(VU32(2)))))
+  assert_false(same(VResult(Ok(VU32(0))), VResult(Err(VString("0")))))
+}

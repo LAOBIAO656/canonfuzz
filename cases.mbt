@@ -299,7 +299,8 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
 pub fn all_regression_suites() -> Array[Case] {
   scalar_regression_suite() +
   wide_flags_regression_suite() +
-  option_u32_regression_suite()
+  option_u32_regression_suite() +
+  result_u32_string_regression_suite()
 }
 
 ///|
@@ -330,6 +331,54 @@ pub fn option_u32_regression_suite() -> Array[Case] {
       input: VOption(Some(VU32(4294967295))),
       expect: VOption(Some(VU32(4294967295))),
       note: "present with the payload's upper bound",
+    },
+  ]
+}
+
+///|
+/// The `wit/result-u32-string.wit` regression corpus. `result-err-empty`
+/// and `result-err-escaped` both matter on their own: an empty string is
+/// the string type's own "zero value" (the same reasoning as
+/// `option-some-zero`), and a message containing a quote exercises the
+/// same mandatory-escape path `canonfuzz_wbtest.mbt` already checks for
+/// strings in isolation, but here across a real component boundary rather
+/// than just in `render`.
+pub fn result_u32_string_regression_suite() -> Array[Case] {
+  [
+    {
+      name: "result-ok-zero",
+      function: "echo-result",
+      input: VResult(Ok(VU32(0))),
+      expect: VResult(Ok(VU32(0))),
+      note: "the ok arm's payload zero value",
+    },
+    {
+      name: "result-ok-max",
+      function: "echo-result",
+      input: VResult(Ok(VU32(4294967295))),
+      expect: VResult(Ok(VU32(4294967295))),
+      note: "the ok arm's payload upper bound",
+    },
+    {
+      name: "result-err-empty",
+      function: "echo-result",
+      input: VResult(Err(VString(""))),
+      expect: VResult(Err(VString(""))),
+      note: "an empty error string, distinct from no error at all",
+    },
+    {
+      name: "result-err-message",
+      function: "echo-result",
+      input: VResult(Err(VString("not found"))),
+      expect: VResult(Err(VString("not found"))),
+      note: "a representative error message",
+    },
+    {
+      name: "result-err-escaped",
+      function: "echo-result",
+      input: VResult(Err(VString("say \"hi\""))),
+      expect: VResult(Err(VString("say \"hi\""))),
+      note: "an error string containing a quote, which WAVE must escape to stay a single string literal",
     },
   ]
 }

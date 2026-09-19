@@ -28,11 +28,11 @@ construction rather than found by random search.
 ## What's implemented
 
 - A `Value` type covering the primitive WIT scalars (`bool`, `s8`..`s64`,
-  `u8`..`u64`, `f32`, `f64`, `char`), `flags`, and `option<T>` for any `T`
-  it can already represent, plus a WAVE-text renderer for all of them
-  (`value.mbt`, `wave.mbt`). WAVE is the text encoding `wasmtime run
-  --invoke` reads and writes; the grammar this implements is the subset
-  described in bytecodealliance/wasm-tools'
+  `u8`..`u64`, `f32`, `f64`, `char`, `string`), `flags`, `option<T>`, and
+  `result<T, E>` for any `T`/`E` it can already represent, plus a
+  WAVE-text renderer for all of them (`value.mbt`, `wave.mbt`). WAVE is
+  the text encoding `wasmtime run --invoke` reads and writes; the grammar
+  this implements is the subset described in bytecodealliance/wasm-tools'
   [wasm-wave README](https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md)
   needed for these types. No code from that project is reproduced here -
   this is an independent implementation against its published grammar.
@@ -40,8 +40,10 @@ construction rather than found by random search.
   boundary or representative values with a note on why the case exists:
   `wit/scalars.wit` (every primitive scalar type), `wit/wide-flags.wit` (a
   36-member `flags` type, with cases targeting the 32-bit word boundary
-  directly), and `wit/option-u32.wit` (`none` and `some` at both ends of
-  `u32`'s range).
+  directly), `wit/option-u32.wit` (`none` and `some` at both ends of
+  `u32`'s range), and `wit/result-u32-string.wit` (both arms, including an
+  empty and a quote-containing error string to exercise WAVE's mandatory
+  string escaping across a real component boundary).
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -63,8 +65,9 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Only scalars, one flags type, and `option<u32>`. Records, lists,
-  results, variants, enums and nested/recursive shapes are not covered.
+- Only scalars, one flags type, `option<u32>`, and `result<u32, string>`.
+  Records, lists, variants, enums and nested/recursive shapes are not
+  covered.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -125,13 +128,28 @@ canonfuzz: running the regression suite against the component
   pass  option-some-max
 
 3 passed, 0 failed, 3 total
+
+== result-u32-string ==
+canonfuzz: generating guest bindings for wit/result-u32-string.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  result-ok-zero
+  pass  result-ok-max
+  pass  result-err-empty
+  pass  result-err-message
+  pass  result-err-escaped
+
+5 passed, 0 failed, 5 total
 ```
 
-This run passes overall: the scalars and option-u32 fixtures build and every
-case round-trips correctly, and the flags fixture's build failure is the one
-already tracked in "A finding along the way" rather than a new problem, so
-it does not fail the run. This exact sequence has run and passed in CI on
-both Linux and macOS - see the Actions tab for the run history.
+This run passes overall: the scalars, option-u32 and result-u32-string
+fixtures build and every case round-trips correctly, and the flags fixture's
+build failure is the one already tracked in "A finding along the way" rather
+than a new problem, so it does not fail the run. This exact sequence has run
+and passed in CI on both Linux and macOS - see the Actions tab for the run
+history.
 
 ## A finding along the way
 
@@ -186,8 +204,8 @@ against a real host.
 
 ## License
 
-Apache-2.0, see `LICENSE`. `wit/scalars.wit`, `wit/wide-flags.wit` and
-`wit/option-u32.wit` are original to this project. The WAVE encoding this project implements a
-renderer for is specified by the `wasm-wave` crate
-(bytecodealliance/wasm-tools, Apache-2.0), linked above; this project does
-not vendor or reproduce that crate's code.
+Apache-2.0, see `LICENSE`. Every file under `wit/` is original to this
+project. The WAVE encoding this project implements a renderer for is
+specified by the `wasm-wave` crate (bytecodealliance/wasm-tools,
+Apache-2.0), linked above; this project does not vendor or reproduce that
+crate's code.

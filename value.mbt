@@ -1,16 +1,21 @@
 ///|
 /// A single WIT value that `canonfuzz` knows how to carry across a
-/// component boundary: the primitive numeric types, `bool` and `char`
-/// (the scalar regression suite in `cases.mbt`), `flags` (the
-/// `wide-flags` suite), and `option<T>` for any `T` this type can already
-/// represent (the `option-u32` suite). Records, lists, results, variants,
-/// enums and resources are planned; see the roadmap in README.md.
+/// component boundary: the primitive numeric types, `bool`, `char` and
+/// `string` (the scalar regression suite in `cases.mbt`), `flags` (the
+/// `wide-flags` suite), `option<T>` (the `option-u32` suite), and
+/// `result<T, E>` for any `T`/`E` this type can already represent (the
+/// `result-u32-string` suite). Records, lists, variants, enums and
+/// resources are planned; see the roadmap in README.md.
 ///
 /// `VFlags` carries its own label list rather than referring to some
 /// external schema, because WAVE renders a flags value as the set of its
 /// member *names* (`{read, write}`), not as a bitmask - a `Value` has to
 /// be self-contained to render itself. `bits` sets bit `i` for
 /// `labels[i]`; `labels.length()` must be at most 64.
+///
+/// `VResult` reuses MoonBit's built-in `Result` rather than inventing a
+/// two-armed variant of its own, since `wit-bindgen` already lowers WIT
+/// `result<T, E>` to exactly `Result[T, E]`.
 pub enum Value {
   VBool(Bool)
   VS8(Int)
@@ -24,8 +29,10 @@ pub enum Value {
   VF32(Float)
   VF64(Double)
   VChar(Char)
+  VString(String)
   VFlags(labels~ : Array[String], bits~ : UInt64)
   VOption(Value?)
+  VResult(Result[Value, Value])
 } derive(Debug)
 
 ///|
@@ -48,10 +55,13 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VF32(x), VF32(y)) => x == y || (x.is_nan() && y.is_nan())
     (VF64(x), VF64(y)) => x == y || (x.is_nan() && y.is_nan())
     (VChar(x), VChar(y)) => x == y
+    (VString(x), VString(y)) => x == y
     (VFlags(labels=lx, bits=bx), VFlags(labels=ly, bits=by)) =>
       lx == ly && bx == by
     (VOption(None), VOption(None)) => true
     (VOption(Some(x)), VOption(Some(y))) => same(x, y)
+    (VResult(Ok(x)), VResult(Ok(y))) => same(x, y)
+    (VResult(Err(x)), VResult(Err(y))) => same(x, y)
     (_, _) => false
   }
 }

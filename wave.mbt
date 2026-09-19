@@ -12,12 +12,13 @@
 /// `wasm-tools`:
 /// https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md
 ///
-/// `option` always renders in its explicit `some(...)`/`none` form rather
-/// than the grammar's "flat" alternative (a bare payload standing for
-/// `some`), because that is what `wasmtime run --invoke` itself prints for
-/// an option result - confirmed by hand against `wasmtime` 48.0.2, since
-/// the grammar documents the flat form as legal input but does not commit
-/// any implementation to using it for output.
+/// `option` and `result` always render in their explicit
+/// `some(...)`/`none` and `ok(...)`/`err(...)` forms rather than the
+/// grammar's "flat" alternatives (a bare payload standing for `some` or
+/// `ok`), because that is what `wasmtime run --invoke` itself prints for
+/// both - confirmed by hand against `wasmtime` 48.0.2, since the grammar
+/// documents the flat forms as legal input but does not commit any
+/// implementation to using them for output.
 pub fn render(v : Value) -> String {
   match v {
     VBool(b) => if b { "true" } else { "false" }
@@ -31,10 +32,13 @@ pub fn render(v : Value) -> String {
     VU64(n) => n.to_string()
     VF32(f) => render_float(f.to_double())
     VF64(f) => render_float(f)
-    VChar(c) => render_char(c)
+    VChar(c) => "'" + escape(c, quote='\'') + "'"
+    VString(s) => render_string(s)
     VFlags(labels~, bits~) => render_flags(labels, bits)
     VOption(None) => "none"
     VOption(Some(inner)) => "some(" + render(inner) + ")"
+    VResult(Ok(inner)) => "ok(" + render(inner) + ")"
+    VResult(Err(inner)) => "err(" + render(inner) + ")"
   }
 }
 
@@ -76,23 +80,41 @@ fn render_float(f : Double) -> String {
 }
 
 ///|
-/// Render a single WAVE char literal, applying the escapes the grammar
-/// makes mandatory (backslash, quote, and the three C0 controls with their
-/// own escape). Every other control character uses the `\u{...}` form;
-/// everything else is written out as-is.
-fn render_char(c : Char) -> String {
-  let body = match c {
-    '\\' => "\\\\"
-    '\'' => "\\'"
-    '\n' => "\\n"
-    '\r' => "\\r"
-    '\t' => "\\t"
-    _ =>
-      if c.to_int() < 0x20 {
-        "\\u{" + c.to_int().to_string() + "}"
-      } else {
-        c.to_string()
-      }
+/// Render a WAVE string literal: double-quote-delimited, with every char
+/// escaped the same way `escape` would escape it inside a char literal,
+/// except that `"` rather than `'` is the delimiter that must be escaped -
+/// a bare `'` needs no escape inside a string, and a bare `"` would end
+/// the literal early.
+fn render_string(s : String) -> String {
+  let mut out = "\""
+  for c in s {
+    out = out + escape(c, quote='"')
   }
-  "'" + body + "'"
+  out + "\""
+}
+
+///|
+/// The escape WAVE requires for one char, inside either a char or a string
+/// literal: backslash, the active delimiter (`'` for a char, `"` for a
+/// string), and the three C0 controls with their own escape. Every other
+/// control character uses the `\u{...}` form; everything else is written
+/// out as-is.
+fn escape(c : Char, quote~ : Char) -> String {
+  if c == '\\' {
+    "\\\\"
+  } else if c == quote {
+    "\\" + quote.to_string()
+  } else {
+    match c {
+      '\n' => "\\n"
+      '\r' => "\\r"
+      '\t' => "\\t"
+      _ =>
+        if c.to_int() < 0x20 {
+          "\\u{" + c.to_int().to_string() + "}"
+        } else {
+          c.to_string()
+        }
+    }
+  }
 }
