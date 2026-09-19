@@ -12,6 +12,10 @@ pub fn same(Value, Value) -> Bool
 
 pub fn scalar_regression_suite() -> Array[Case]
 
+pub fn wide_flags_labels() -> Array[String]
+
+pub fn wide_flags_regression_suite() -> Array[Case]
+
 // Errors
 
 // Types and methods
@@ -36,6 +40,7 @@ pub enum Value {
   VF32(Float)
   VF64(Double)
   VChar(Char)
+  VFlags(labels~ : Array[String], bits~ : UInt64)
 } derive(@debug.Debug)
 
 // Type aliases

@@ -6,3 +6,5 @@ target
 .moonagent/
 .canonfuzz-work/
 _scratch_guest/
+_probe_flags/
+.claude/

@@ -1,10 +1,15 @@
 ///|
 /// A single WIT value that `canonfuzz` knows how to carry across a
-/// component boundary. The v1 vocabulary is deliberately limited to the
-/// primitive numeric types, `bool` and `char` - the type-formers that the
-/// scalar regression suite in `cases.mbt` exercises. Compound shapes
-/// (records, lists, options, results, variants, flags, resources) are
-/// planned; see the roadmap in README.md.
+/// component boundary: the primitive numeric types, `bool` and `char`
+/// (the scalar regression suite in `cases.mbt`), plus `flags` (the
+/// `wide-flags` suite). Records, lists, options, results, variants, enums
+/// and resources are planned; see the roadmap in README.md.
+///
+/// `VFlags` carries its own label list rather than referring to some
+/// external schema, because WAVE renders a flags value as the set of its
+/// member *names* (`{read, write}`), not as a bitmask - a `Value` has to
+/// be self-contained to render itself. `bits` sets bit `i` for
+/// `labels[i]`; `labels.length()` must be at most 64.
 pub enum Value {
   VBool(Bool)
   VS8(Int)
@@ -18,6 +23,7 @@ pub enum Value {
   VF32(Float)
   VF64(Double)
   VChar(Char)
+  VFlags(labels~ : Array[String], bits~ : UInt64)
 } derive(Debug)
 
 ///|
@@ -40,6 +46,8 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VF32(x), VF32(y)) => x == y || (x.is_nan() && y.is_nan())
     (VF64(x), VF64(y)) => x == y || (x.is_nan() && y.is_nan())
     (VChar(x), VChar(y)) => x == y
+    (VFlags(labels=lx, bits=bx), VFlags(labels=ly, bits=by)) =>
+      lx == ly && bx == by
     (_, _) => false
   }
 }

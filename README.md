@@ -37,11 +37,21 @@ construction rather than found by random search.
   this is an independent implementation against its published grammar.
 - A fixed regression corpus for `wit/scalars.wit` (`cases.mbt`): boundary
   values for every scalar type, annotated with which upstream report (if
-  any) motivated each one.
-- `cmd/main`: a native CLI that runs the full pipeline above against that
-  corpus and reports pass/fail per case, with the tool stage (codegen,
+  any) motivated each one. A second corpus, for `wit/wide-flags.wit`,
+  covers a 36-member `flags` type - past the 32-bit boundary a single
+  machine word covers - with cases targeting that boundary directly.
+- `cmd/main`: a native CLI that runs the full pipeline above against both
+  fixtures and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
   when something fails before any case can even run.
+- Expected-failure tracking for a fixture whose build is currently known
+  to fail (`wide-flags`, see "A finding along the way"): that failure is
+  reported but does not fail the run, and if the build ever unexpectedly
+  *succeeds* - i.e. the underlying defect got fixed upstream - `cmd/main`
+  notices and runs the fixture's real cases instead of continuing to treat
+  it as a known failure. A regression in the other direction (a fixture
+  that is supposed to pass failing, or a supposedly-fixed one failing its
+  cases once it builds) still fails the run.
 
 The core (`value.mbt`, `wave.mbt`, `cases.mbt`) has no external
 dependency and builds on every MoonBit target. `cmd/main` requires
@@ -51,10 +61,8 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Only scalars. Compound types (records, lists, options, results, variants,
-  enums, flags) are not covered. A `wide-flags` fixture
-  (`wit/wide-flags.wit`, 36 flags) is checked in but its `cmd/main` support
-  is not wired up yet - see "A finding along the way".
+- Only scalars and one flags type. Records, lists, options, results,
+  variants, enums and nested/recursive shapes are not covered.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -71,15 +79,17 @@ moon test                                    # core package, no external tools n
 moon run cmd/main --target native            # full pipeline; needs wit-bindgen, wasm-tools, wasmtime on PATH
 ```
 
-`moon run cmd/main` regenerates `.canonfuzz-work/scalars` from
-`wit/scalars.wit` on every run - nothing under that path is checked in.
+`moon run cmd/main` regenerates `.canonfuzz-work/<fixture>` from the
+matching `wit/*.wit` file on every run - nothing under that path is
+checked in.
 
-Sample output against `wit-bindgen-cli` 0.62.0 and `wasmtime` 48.0.2 (also
-reproducible by hand, one case at a time, with
+Sample output against `wit-bindgen-cli` 0.62.0 and `wasmtime` 48.0.2 (the
+scalar portion is also reproducible by hand, one case at a time, with
 `wasmtime run --invoke "echo-s8(-128)" component.wasm` against the
 component `cmd/main` builds):
 
 ```
+== scalars ==
 canonfuzz: generating guest bindings for wit/scalars.wit
 canonfuzz: building the guest component with moon
 canonfuzz: turning the core module into a component with wasm-tools
@@ -93,7 +103,21 @@ canonfuzz: running the regression suite against the component
   pass  char-snowman
 
 24 passed, 0 failed, 24 total
+
+== wide-flags ==
+canonfuzz: generating guest bindings for wit/wide-flags.wit
+canonfuzz: building the guest component with moon
+canonfuzz: wide-flags build failed as expected (tracked, not a new problem)
+  tracked cause: wit-bindgen-cli generates an extra closing parenthesis in
+  the high-word accessor for flags with more than 32 members
+  (wit-bindgen/wit-bindgen#1517-class defect); see README.md
 ```
+
+This run passes overall: the scalar fixture builds and every case round-trips
+correctly, and the flags fixture's build failure is the one already tracked
+in "A finding along the way" rather than a new problem, so it does not fail
+the run. This exact sequence has run and passed in CI on both Linux and
+macOS - see the Actions tab for the run history.
 
 ## A finding along the way
 
@@ -110,9 +134,13 @@ mbt_ffi_store32((return_area) + 4, (flag >> 32).to_int()))
 - which fails to parse, so `moon build` rejects the generated package
 outright. This is a fresh, independently reproduced instance of the same
 class of bug reported in #1517 ("flags over 32 bits mis-generate"), still
-present in the current release. `cmd/main` does not yet drive this fixture
-automatically (see "What's not implemented yet"); the fixture and this
-note exist so the finding isn't lost before that capability is built.
+present in the current release. `cmd/main` drives this fixture the same
+way as the scalar one, but treats its build failure as expected (see
+"What's implemented") rather than letting it fail the run - the point of
+tracking it here, rather than just skipping the fixture, is that the
+tracking itself breaks loudly (as a genuine, non-ignorable failure) the
+day `wit-bindgen` fixes this and `cmd/main` starts running the six
+`flags-*` cases in `cases.mbt` for real.
 
 Separately, the previously reported `s8`/`s16` corruption (#1518) did not
 reproduce against `wit-bindgen-cli` 0.62.0 for any boundary value in
@@ -126,8 +154,8 @@ suite is exactly the place to track a fix staying fixed.
 | `wasm-gc` | core package builds and tests pass locally |
 | `wasm` | core package builds and tests pass locally |
 | `js` | core package expected to work; not run locally (no Node.js in the development environment); exercised in CI |
-| `native`, core package | type-checks locally; build/test not run locally (no C toolchain in the development environment); exercised in CI |
-| `native`, `cmd/main` | type-checks locally; the full pipeline was run and verified by hand outside `cmd/main` (see the sample output above) but `cmd/main` itself has not been executed, since it needs both a C toolchain and `moonbitlang/async`'s process support, neither available in the development environment; exercised in CI on Linux and macOS only |
+| `native`, core package | type-checks locally; build/test not run locally (no C toolchain in the development environment); passes in CI on Linux, macOS and Windows |
+| `native`, `cmd/main` | type-checks locally; not executed locally, for the same reason, and additionally needs `moonbitlang/async`'s process support; passes in CI on Linux and macOS, running the exact sequence in "Running it" above |
 | `native` on Windows | not currently claimed as supported; `moonbitlang/async`'s own documentation states it currently supports native/LLVM on Linux and macOS, and this project has not tested otherwise |
 
 ## Why this and not something else

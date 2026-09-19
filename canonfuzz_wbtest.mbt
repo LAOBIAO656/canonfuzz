@@ -69,3 +69,42 @@ test "same rejects unequal values of the same shape" {
 test "same rejects mismatched shapes" {
   assert_false(same(VS8(1), VS16(1)))
 }
+
+///|
+/// WAVE renders a flags value as the set of labels whose bit is set. An
+/// empty set is `{}`, not empty text - dropping the braces would parse as
+/// nothing at all rather than as a valid flags literal.
+test "render renders flags as the set of labels whose bit is set" {
+  let labels = ["a", "b", "c"]
+  assert_eq(render(VFlags(labels~, bits=0UL)), "{}")
+  assert_eq(render(VFlags(labels~, bits=1UL)), "{a}")
+  assert_eq(render(VFlags(labels~, bits=0b101UL)), "{a, c}")
+  assert_eq(render(VFlags(labels~, bits=0b111UL)), "{a, b, c}")
+}
+
+///|
+/// The defect this suite exists to catch concerns exactly the boundary
+/// between the low and high 32-bit words of a flags value backed by more
+/// than 32 members; rendering must not special-case that boundary itself,
+/// so a bit past it renders the same way a bit before it would.
+test "render handles flag bits past the 32-bit boundary" {
+  let labels = wide_flags_labels()
+  assert_eq(render(VFlags(labels~, bits=1UL << 32)), "{bit-32}")
+  assert_eq(render(VFlags(labels~, bits=1UL << 35)), "{bit-35}")
+}
+
+///|
+/// `same()` for flags compares both the label list and the bits - two
+/// values with the same bits set but different label lists describe
+/// different flags types and must not compare equal.
+test "same distinguishes flags by labels as well as bits" {
+  assert_true(
+    same(VFlags(labels=["a"], bits=1UL), VFlags(labels=["a"], bits=1UL)),
+  )
+  assert_false(
+    same(VFlags(labels=["a"], bits=1UL), VFlags(labels=["b"], bits=1UL)),
+  )
+  assert_false(
+    same(VFlags(labels=["a"], bits=1UL), VFlags(labels=["a"], bits=0UL)),
+  )
+}

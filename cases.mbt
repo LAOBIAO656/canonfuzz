@@ -209,3 +209,84 @@ pub fn scalar_regression_suite() -> Array[Case] {
     },
   ]
 }
+
+///|
+/// The flag labels declared by `wit/wide-flags.wit`, in declaration
+/// order. Kept as one array so every case below and the fixture in
+/// `cmd/main` agree on what bit index a given label is - a mismatch here
+/// would make a case's `note` describe a different bit than the one it
+/// actually sets.
+pub fn wide_flags_labels() -> Array[String] {
+  [
+    "bit-00", "bit-01", "bit-02", "bit-03", "bit-04", "bit-05", "bit-06", "bit-07",
+    "bit-08", "bit-09", "bit-10", "bit-11", "bit-12", "bit-13", "bit-14", "bit-15",
+    "bit-16", "bit-17", "bit-18", "bit-19", "bit-20", "bit-21", "bit-22", "bit-23",
+    "bit-24", "bit-25", "bit-26", "bit-27", "bit-28", "bit-29", "bit-30", "bit-31",
+    "bit-32", "bit-33", "bit-34", "bit-35",
+  ]
+}
+
+///|
+fn flags(bits : UInt64) -> Value {
+  VFlags(labels=wide_flags_labels(), bits~)
+}
+
+///|
+/// The `wit/wide-flags.wit` regression corpus. As of this writing every
+/// one of these cases fails before it can even run, because the fixture
+/// does not build - see the "known finding" in README.md. The corpus
+/// exists anyway so that the moment the underlying `wit-bindgen` defect is
+/// fixed, `cmd/main` has real coverage ready rather than needing new cases
+/// written under time pressure.
+///
+/// Each case's bit position matters: `bit-31` is the top bit of the low
+/// 32-bit word, `bit-32` is the bottom bit of the high word, and `bit-35`
+/// is the highest declared bit. Getting the boundary and just past it both
+/// covered directly targets the reported defect (an extra `)` in the
+/// generated high-word accessor).
+pub fn wide_flags_regression_suite() -> Array[Case] {
+  [
+    {
+      name: "flags-none",
+      function: "echo-wide-flags",
+      input: flags(0UL),
+      expect: flags(0UL),
+      note: "no flags set",
+    },
+    {
+      name: "flags-all",
+      function: "echo-wide-flags",
+      input: flags(0xFFFFFFFFFUL),
+      expect: flags(0xFFFFFFFFFUL),
+      note: "all 36 declared flags set",
+    },
+    {
+      name: "flags-bit-00",
+      function: "echo-wide-flags",
+      input: flags(1UL),
+      expect: flags(1UL),
+      note: "lowest bit only, entirely within the low word",
+    },
+    {
+      name: "flags-bit-31",
+      function: "echo-wide-flags",
+      input: flags(1UL << 31),
+      expect: flags(1UL << 31),
+      note: "top bit of the low 32-bit word",
+    },
+    {
+      name: "flags-bit-32",
+      function: "echo-wide-flags",
+      input: flags(1UL << 32),
+      expect: flags(1UL << 32),
+      note: "bottom bit of the high word; wit-bindgen/wit-bindgen#1517 reported flags past 32 members mis-generating, and this project independently reproduced a parse error in exactly this accessor - see README",
+    },
+    {
+      name: "flags-bit-35",
+      function: "echo-wide-flags",
+      input: flags(1UL << 35),
+      expect: flags(1UL << 35),
+      note: "highest declared bit",
+    },
+  ]
+}

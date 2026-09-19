@@ -24,7 +24,29 @@ pub fn render(v : Value) -> String {
     VF32(f) => render_float(f.to_double())
     VF64(f) => render_float(f)
     VChar(c) => render_char(c)
+    VFlags(labels~, bits~) => render_flags(labels, bits)
   }
+}
+
+///|
+/// Render a flags value as the WAVE set-of-labels form: the labels whose
+/// bit is set, comma-separated inside braces, in declaration order (WAVE
+/// allows any order; declaration order keeps output deterministic so two
+/// renderings of an equal value are always byte-identical). An empty set
+/// is `{}`.
+fn render_flags(labels : Array[String], bits : UInt64) -> String {
+  let mut out = "{"
+  let mut first = true
+  for i = 0; i < labels.length(); i = i + 1 {
+    if ((bits >> i) & 1UL) == 1UL {
+      if !first {
+        out = out + ", "
+      }
+      out = out + labels[i]
+      first = false
+    }
+  }
+  out + "}"
 }
 
 ///|
