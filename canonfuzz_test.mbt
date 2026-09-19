@@ -4,10 +4,7 @@
 /// pair that can never agree, which would make the whole suite useless
 /// regardless of what a component returns.
 test "regression suite entries are internally consistent" {
-  for case in scalar_regression_suite() {
-    assert_true(same(case.input, case.expect))
-  }
-  for case in wide_flags_regression_suite() {
+  for case in all_regression_suites() {
     assert_true(same(case.input, case.expect))
   }
 }
@@ -19,11 +16,7 @@ test "regression suite entries are internally consistent" {
 /// the clash is within one suite or between two of them.
 test "regression suite case names are unique" {
   let seen : Map[String, Bool] = Map([])
-  for case in scalar_regression_suite() {
-    assert_false(seen.contains(case.name))
-    seen[case.name] = true
-  }
-  for case in wide_flags_regression_suite() {
+  for case in all_regression_suites() {
     assert_false(seen.contains(case.name))
     seen[case.name] = true
   }

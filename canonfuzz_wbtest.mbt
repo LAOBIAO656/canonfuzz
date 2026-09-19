@@ -108,3 +108,33 @@ test "same distinguishes flags by labels as well as bits" {
     same(VFlags(labels=["a"], bits=1UL), VFlags(labels=["a"], bits=0UL)),
   )
 }
+
+///|
+/// `render` always uses the explicit `some(...)`/`none` form, matching
+/// what `wasmtime run --invoke` itself prints (confirmed by hand against
+/// `wasmtime` 48.0.2 - see the note on `render` in wave.mbt) rather than
+/// the grammar's alternate flat form for `some`.
+test "render renders options in explicit some/none form" {
+  assert_eq(render(VOption(None)), "none")
+  assert_eq(render(VOption(Some(VU32(0)))), "some(0)")
+  assert_eq(render(VOption(Some(VU32(4294967295)))), "some(4294967295)")
+}
+
+///|
+/// An option's payload can itself be any `Value` this module knows how to
+/// render - `render` for `VOption` must not special-case what it wraps.
+test "render renders an option around a non-trivial payload" {
+  assert_eq(render(VOption(Some(VChar('\'')))), "some('\\'')")
+}
+
+///|
+/// `same()` for options must compare `None` to `None`, compare payloads
+/// recursively when both are `Some`, and reject a `None`/`Some` mismatch -
+/// exactly the three cases `option_u32_regression_suite` exercises against
+/// a real component.
+test "same compares options structurally" {
+  assert_true(same(VOption(None), VOption(None)))
+  assert_true(same(VOption(Some(VU32(1))), VOption(Some(VU32(1)))))
+  assert_false(same(VOption(Some(VU32(1))), VOption(Some(VU32(2)))))
+  assert_false(same(VOption(None), VOption(Some(VU32(0)))))
+}

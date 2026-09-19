@@ -1,0 +1,5 @@
+package canonfuzz:option-u32@0.1.0;
+
+world canon-option-u32 {
+    export echo-option-u32: func(v: option<u32>) -> option<u32>;
+}

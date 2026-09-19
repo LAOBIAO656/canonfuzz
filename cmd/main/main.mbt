@@ -39,6 +39,16 @@ fn fixtures() -> Array[Fixture] {
         "wit-bindgen-cli generates an extra closing parenthesis in the high-word accessor for flags with more than 32 members (wit-bindgen/wit-bindgen#1517-class defect); see README.md",
       ),
     },
+    {
+      name: "option-u32",
+      wit_file: "wit/option-u32.wit",
+      world: "canon-option-u32",
+      echo_pkg_dir: "gen/world/canon-option-u32",
+      echo_impl: OPTION_U32_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/option-u32",
+      cases: @canonfuzz.option_u32_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -235,6 +245,12 @@ const WIDE_FLAGS_ECHO_IMPL =
   #|) -> @canon-wide-flags.WideFlags {
   #|  v
   #|}
+  #|
+
+///|
+const OPTION_U32_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_option_u32(v : UInt?) -> UInt? { v }
   #|
 
 ///|

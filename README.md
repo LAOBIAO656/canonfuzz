@@ -28,20 +28,22 @@ construction rather than found by random search.
 ## What's implemented
 
 - A `Value` type covering the primitive WIT scalars (`bool`, `s8`..`s64`,
-  `u8`..`u64`, `f32`, `f64`, `char`) and a WAVE-text renderer for it
+  `u8`..`u64`, `f32`, `f64`, `char`), `flags`, and `option<T>` for any `T`
+  it can already represent, plus a WAVE-text renderer for all of them
   (`value.mbt`, `wave.mbt`). WAVE is the text encoding `wasmtime run
   --invoke` reads and writes; the grammar this implements is the subset
   described in bytecodealliance/wasm-tools'
   [wasm-wave README](https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md)
   needed for these types. No code from that project is reproduced here -
   this is an independent implementation against its published grammar.
-- A fixed regression corpus for `wit/scalars.wit` (`cases.mbt`): boundary
-  values for every scalar type, annotated with which upstream report (if
-  any) motivated each one. A second corpus, for `wit/wide-flags.wit`,
-  covers a 36-member `flags` type - past the 32-bit boundary a single
-  machine word covers - with cases targeting that boundary directly.
-- `cmd/main`: a native CLI that runs the full pipeline above against both
-  fixtures and reports pass/fail per case, with the tool stage (codegen,
+- A fixed regression corpus per fixture (`cases.mbt`), each a list of named
+  boundary or representative values with a note on why the case exists:
+  `wit/scalars.wit` (every primitive scalar type), `wit/wide-flags.wit` (a
+  36-member `flags` type, with cases targeting the 32-bit word boundary
+  directly), and `wit/option-u32.wit` (`none` and `some` at both ends of
+  `u32`'s range).
+- `cmd/main`: a native CLI that runs the full pipeline above against every
+  fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
   when something fails before any case can even run.
 - Expected-failure tracking for a fixture whose build is currently known
@@ -61,8 +63,8 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Only scalars and one flags type. Records, lists, options, results,
-  variants, enums and nested/recursive shapes are not covered.
+- Only scalars, one flags type, and `option<u32>`. Records, lists,
+  results, variants, enums and nested/recursive shapes are not covered.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -111,13 +113,25 @@ canonfuzz: wide-flags build failed as expected (tracked, not a new problem)
   tracked cause: wit-bindgen-cli generates an extra closing parenthesis in
   the high-word accessor for flags with more than 32 members
   (wit-bindgen/wit-bindgen#1517-class defect); see README.md
+
+== option-u32 ==
+canonfuzz: generating guest bindings for wit/option-u32.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  option-none
+  pass  option-some-zero
+  pass  option-some-max
+
+3 passed, 0 failed, 3 total
 ```
 
-This run passes overall: the scalar fixture builds and every case round-trips
-correctly, and the flags fixture's build failure is the one already tracked
-in "A finding along the way" rather than a new problem, so it does not fail
-the run. This exact sequence has run and passed in CI on both Linux and
-macOS - see the Actions tab for the run history.
+This run passes overall: the scalars and option-u32 fixtures build and every
+case round-trips correctly, and the flags fixture's build failure is the one
+already tracked in "A finding along the way" rather than a new problem, so
+it does not fail the run. This exact sequence has run and passed in CI on
+both Linux and macOS - see the Actions tab for the run history.
 
 ## A finding along the way
 
@@ -172,8 +186,8 @@ against a real host.
 
 ## License
 
-Apache-2.0, see `LICENSE`. `wit/scalars.wit` and `wit/wide-flags.wit` are
-original to this project. The WAVE encoding this project implements a
+Apache-2.0, see `LICENSE`. `wit/scalars.wit`, `wit/wide-flags.wit` and
+`wit/option-u32.wit` are original to this project. The WAVE encoding this project implements a
 renderer for is specified by the `wasm-wave` crate
 (bytecodealliance/wasm-tools, Apache-2.0), linked above; this project does
 not vendor or reproduce that crate's code.

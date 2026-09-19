@@ -6,10 +6,18 @@
 /// real component through the command line with no custom host binary.
 ///
 /// This module implements only the subset of the WAVE grammar needed for
-/// the value vocabulary in `value.mbt` (booleans, integers, floats and
-/// chars). The full grammar, including records, lists and variants, is
-/// specified by the `wasm-wave` crate that ships with `wasm-tools`:
+/// the value vocabulary in `value.mbt` (booleans, integers, floats, chars,
+/// flags and options). The full grammar, including records, lists and
+/// variants, is specified by the `wasm-wave` crate that ships with
+/// `wasm-tools`:
 /// https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md
+///
+/// `option` always renders in its explicit `some(...)`/`none` form rather
+/// than the grammar's "flat" alternative (a bare payload standing for
+/// `some`), because that is what `wasmtime run --invoke` itself prints for
+/// an option result - confirmed by hand against `wasmtime` 48.0.2, since
+/// the grammar documents the flat form as legal input but does not commit
+/// any implementation to using it for output.
 pub fn render(v : Value) -> String {
   match v {
     VBool(b) => if b { "true" } else { "false" }
@@ -25,6 +33,8 @@ pub fn render(v : Value) -> String {
     VF64(f) => render_float(f)
     VChar(c) => render_char(c)
     VFlags(labels~, bits~) => render_flags(labels, bits)
+    VOption(None) => "none"
+    VOption(Some(inner)) => "some(" + render(inner) + ")"
   }
 }
 

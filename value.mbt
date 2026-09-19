@@ -1,9 +1,10 @@
 ///|
 /// A single WIT value that `canonfuzz` knows how to carry across a
 /// component boundary: the primitive numeric types, `bool` and `char`
-/// (the scalar regression suite in `cases.mbt`), plus `flags` (the
-/// `wide-flags` suite). Records, lists, options, results, variants, enums
-/// and resources are planned; see the roadmap in README.md.
+/// (the scalar regression suite in `cases.mbt`), `flags` (the
+/// `wide-flags` suite), and `option<T>` for any `T` this type can already
+/// represent (the `option-u32` suite). Records, lists, results, variants,
+/// enums and resources are planned; see the roadmap in README.md.
 ///
 /// `VFlags` carries its own label list rather than referring to some
 /// external schema, because WAVE renders a flags value as the set of its
@@ -24,6 +25,7 @@ pub enum Value {
   VF64(Double)
   VChar(Char)
   VFlags(labels~ : Array[String], bits~ : UInt64)
+  VOption(Value?)
 } derive(Debug)
 
 ///|
@@ -48,6 +50,8 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VChar(x), VChar(y)) => x == y
     (VFlags(labels=lx, bits=bx), VFlags(labels=ly, bits=by)) =>
       lx == ly && bx == by
+    (VOption(None), VOption(None)) => true
+    (VOption(Some(x)), VOption(Some(y))) => same(x, y)
     (_, _) => false
   }
 }

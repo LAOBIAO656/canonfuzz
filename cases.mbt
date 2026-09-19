@@ -290,3 +290,46 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
     },
   ]
 }
+
+///|
+/// Every case from every suite `cmd/main` can run, concatenated. Tests
+/// that check a property of "every case" (names are unique, input equals
+/// expect) iterate this instead of listing each suite by hand, so adding a
+/// new suite here automatically brings it under those checks too.
+pub fn all_regression_suites() -> Array[Case] {
+  scalar_regression_suite() +
+  wide_flags_regression_suite() +
+  option_u32_regression_suite()
+}
+
+///|
+/// The `wit/option-u32.wit` regression corpus: `none`, and `some` at both
+/// ends of `u32`'s range. `some(0)` matters on its own, separately from
+/// `none` - a buggy lowering that collapsed "some of the zero value" into
+/// "no value" would still pass a suite that only ever tried `none` and one
+/// arbitrary `some`.
+pub fn option_u32_regression_suite() -> Array[Case] {
+  [
+    {
+      name: "option-none",
+      function: "echo-option-u32",
+      input: VOption(None),
+      expect: VOption(None),
+      note: "the absent case",
+    },
+    {
+      name: "option-some-zero",
+      function: "echo-option-u32",
+      input: VOption(Some(VU32(0))),
+      expect: VOption(Some(VU32(0))),
+      note: "present with the payload type's zero value, distinct from none",
+    },
+    {
+      name: "option-some-max",
+      function: "echo-option-u32",
+      input: VOption(Some(VU32(4294967295))),
+      expect: VOption(Some(VU32(4294967295))),
+      note: "present with the payload's upper bound",
+    },
+  ]
+}

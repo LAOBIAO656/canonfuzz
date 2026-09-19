@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn all_regression_suites() -> Array[Case]
+
+pub fn option_u32_regression_suite() -> Array[Case]
+
 pub fn render(Value) -> String
 
 pub fn same(Value, Value) -> Bool
@@ -41,6 +45,7 @@ pub enum Value {
   VF64(Double)
   VChar(Char)
   VFlags(labels~ : Array[String], bits~ : UInt64)
+  VOption(Value?)
 } derive(@debug.Debug)
 
 // Type aliases
