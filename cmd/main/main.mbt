@@ -113,7 +113,11 @@ fn fingerprint_matches(output : String, known : KnownFailure) -> Bool {
 enum Outcome {
   Pass
   Trapped(String)
-  Mismatch(actual~ : String, expected~ : String)
+  /// `wasmtime`'s output was not even a valid rendering of the case's
+  /// `shape` - not "a different value", but not a value this shape can
+  /// represent at all.
+  Unparseable(String)
+  Mismatch(actual~ : @canonfuzz.Value, expected~ : @canonfuzz.Value)
 }
 
 ///|
@@ -398,11 +402,14 @@ async fn componentize(f : Fixture) -> String? {
 ///|
 /// Run one case through `wasmtime run --invoke` and classify the result.
 /// The input is rendered to WAVE text with the same `render()` the core
-/// package is tested against, and the expected output is rendered the same
-/// way, so the comparison never depends on `wasmtime`'s own formatting
-/// matching canonfuzz's byte-for-byte - only on the two renderings of
-/// equal `Value`s agreeing, which `canonfuzz_wbtest.mbt` already checks
-/// independently of any component.
+/// package is tested against, and the raw text `wasmtime` prints back is
+/// parsed with `case.shape` and compared to `case.expect` via `same()` -
+/// structurally, not as text - so a difference WAVE's grammar does not
+/// actually distinguish (whitespace, an equally-valid float spelling, and
+/// once records exist, field order) can never register as a false
+/// mismatch. `canonfuzz_test.mbt` checks the round trip this depends on
+/// (`parse(shape, render(expect))` recovers `expect`) independently of
+/// any component.
 async fn run_case(f : Fixture, case : @canonfuzz.Case) -> Outcome {
   let invoke = case.function + "(" + @canonfuzz.render(case.input) + ")"
   let (code, out) = @process.collect_output_merged("wasmtime", [
@@ -414,12 +421,15 @@ async fn run_case(f : Fixture, case : @canonfuzz.Case) -> Outcome {
   if code != 0 {
     return Trapped(out.text().trim().to_owned())
   }
-  let actual = out.text().trim().to_owned()
-  let expected = @canonfuzz.render(case.expect)
-  if actual == expected {
-    Pass
-  } else {
-    Mismatch(actual~, expected~)
+  let actual_text = out.text().trim().to_owned()
+  match @canonfuzz.parse(case.shape, actual_text) {
+    None => Unparseable(actual_text)
+    Some(actual) =>
+      if @canonfuzz.same(actual, case.expect) {
+        Pass
+      } else {
+        Mismatch(actual~, expected=case.expect)
+      }
   }
 }
 
@@ -428,7 +438,14 @@ fn describe(outcome : Outcome) -> String {
   match outcome {
     Pass => "pass"
     Trapped(reason) => "trapped: " + reason
-    Mismatch(actual~, expected~) => "expected " + expected + ", got " + actual
+    Unparseable(text) =>
+      "wasmtime printed something that isn't a valid value of the expected shape: " +
+      text
+    Mismatch(actual~, expected~) =>
+      "expected " +
+      @canonfuzz.render(expected) +
+      ", got " +
+      @canonfuzz.render(actual)
   }
 }
 

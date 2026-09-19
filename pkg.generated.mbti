@@ -10,11 +10,15 @@ pub fn all_regression_suites() -> Array[Case]
 
 pub fn option_u32_regression_suite() -> Array[Case]
 
+pub fn parse(Shape, String) -> Value?
+
 pub fn render(Value) -> String
 
 pub fn result_u32_string_regression_suite() -> Array[Case]
 
 pub fn same(Value, Value) -> Bool
+
+pub fn same_option(Value?, Value?) -> Bool
 
 pub fn scalar_regression_suite() -> Array[Case]
 
@@ -30,7 +34,27 @@ pub struct Case {
   function : String
   input : Value
   expect : Value
+  shape : Shape
   note : String
+} derive(@debug.Debug)
+
+pub enum Shape {
+  ShBool
+  ShS8
+  ShS16
+  ShS32
+  ShS64
+  ShU8
+  ShU16
+  ShU32
+  ShU64
+  ShF32
+  ShF64
+  ShChar
+  ShString
+  ShFlags(Array[String])
+  ShOption(Shape)
+  ShResult(ok~ : Shape, err~ : Shape)
 } derive(@debug.Debug)
 
 pub enum Value {

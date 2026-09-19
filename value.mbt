@@ -65,3 +65,46 @@ pub fn same(a : Value, b : Value) -> Bool {
     (_, _) => false
   }
 }
+
+///|
+/// `same` lifted to `Value?`, for comparing a parse result against an
+/// expected value without going through derived `==` (which would be
+/// wrong for the same reason `same` exists: `Some(nan) == Some(nan)` must
+/// be `true` here, and plain `==` on a `Double` says otherwise).
+pub fn same_option(a : Value?, b : Value?) -> Bool {
+  match (a, b) {
+    (None, None) => true
+    (Some(x), Some(y)) => same(x, y)
+    (_, _) => false
+  }
+}
+
+///|
+/// The type-former shape of a [Value], carrying enough information to
+/// parse WAVE text back into one - which a `Value` itself cannot always
+/// do. A `Value` instance only ever populates one arm of an `option` or
+/// `result`; parsing needs to know what the *other* arm would look like
+/// too; so it can tell a genuinely malformed result from a component that
+/// (correctly or not) returned the arm nobody expected, and describe
+/// either case structurally instead of falling back to raw text. Each
+/// regression suite in `cases.mbt` authors one `Shape` per case
+/// alongside its `Value`s, rather than `parse` trying to infer a shape
+/// from a single example value.
+pub enum Shape {
+  ShBool
+  ShS8
+  ShS16
+  ShS32
+  ShS64
+  ShU8
+  ShU16
+  ShU32
+  ShU64
+  ShF32
+  ShF64
+  ShChar
+  ShString
+  ShFlags(Array[String])
+  ShOption(Shape)
+  ShResult(ok~ : Shape, err~ : Shape)
+} derive(Debug)

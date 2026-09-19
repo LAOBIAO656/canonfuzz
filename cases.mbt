@@ -5,11 +5,19 @@
 /// `expect` is stored separately from `input` (even though every case here
 /// is an identity check) so the corpus format already matches functions
 /// that transform their input, which later capabilities will need.
+///
+/// `shape` is authored alongside `input`/`expect` rather than derived from
+/// `expect`, because a single example `Value` cannot always describe its
+/// own type: `expect: VOption(None)` does not say what the payload type
+/// would be if a buggy component returned `some(...)` instead, and
+/// `expect: VResult(Ok(x))` says nothing about the `err` arm's type. See
+/// the doc comment on `Shape` in value.mbt.
 pub struct Case {
   name : String
   function : String
   input : Value
   expect : Value
+  shape : Shape
   note : String
 } derive(Debug)
 
@@ -30,6 +38,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-bool",
       input: VBool(true),
       expect: VBool(true),
+      shape: ShBool,
       note: "sanity check",
     },
     {
@@ -37,6 +46,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-bool",
       input: VBool(false),
       expect: VBool(false),
+      shape: ShBool,
       note: "sanity check",
     },
     {
@@ -44,6 +54,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s8",
       input: VS8(-128),
       expect: VS8(-128),
+      shape: ShS8,
       note: "lower bound of s8; wit-bindgen/wit-bindgen#1518 reported this width corrupting values",
     },
     {
@@ -51,6 +62,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s8",
       input: VS8(127),
       expect: VS8(127),
+      shape: ShS8,
       note: "upper bound of s8; see wit-bindgen/wit-bindgen#1518",
     },
     {
@@ -58,6 +70,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s8",
       input: VS8(0),
       expect: VS8(0),
+      shape: ShS8,
       note: "zero crossing",
     },
     {
@@ -65,6 +78,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s8",
       input: VS8(-1),
       expect: VS8(-1),
+      shape: ShS8,
       note: "all-ones bit pattern under two's complement",
     },
     {
@@ -72,6 +86,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s16",
       input: VS16(-32768),
       expect: VS16(-32768),
+      shape: ShS16,
       note: "lower bound of s16; see wit-bindgen/wit-bindgen#1518",
     },
     {
@@ -79,6 +94,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s16",
       input: VS16(32767),
       expect: VS16(32767),
+      shape: ShS16,
       note: "upper bound of s16; see wit-bindgen/wit-bindgen#1518",
     },
     {
@@ -86,6 +102,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s32",
       input: VS32(-2147483648),
       expect: VS32(-2147483648),
+      shape: ShS32,
       note: "lower bound of s32",
     },
     {
@@ -93,6 +110,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s32",
       input: VS32(2147483647),
       expect: VS32(2147483647),
+      shape: ShS32,
       note: "upper bound of s32",
     },
     {
@@ -100,6 +118,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s64",
       input: VS64(-9223372036854775808L),
       expect: VS64(-9223372036854775808L),
+      shape: ShS64,
       note: "lower bound of s64",
     },
     {
@@ -107,6 +126,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-s64",
       input: VS64(9223372036854775807L),
       expect: VS64(9223372036854775807L),
+      shape: ShS64,
       note: "upper bound of s64",
     },
     {
@@ -114,6 +134,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-u8",
       input: VU8(255),
       expect: VU8(255),
+      shape: ShU8,
       note: "upper bound of u8",
     },
     {
@@ -121,6 +142,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-u8",
       input: VU8(0),
       expect: VU8(0),
+      shape: ShU8,
       note: "lower bound of u8",
     },
     {
@@ -128,6 +150,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-u16",
       input: VU16(65535),
       expect: VU16(65535),
+      shape: ShU16,
       note: "upper bound of u16",
     },
     {
@@ -135,6 +158,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-u32",
       input: VU32(4294967295),
       expect: VU32(4294967295),
+      shape: ShU32,
       note: "upper bound of u32",
     },
     {
@@ -142,6 +166,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-u64",
       input: VU64(18446744073709551615UL),
       expect: VU64(18446744073709551615UL),
+      shape: ShU64,
       note: "upper bound of u64",
     },
     {
@@ -149,6 +174,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-f32",
       input: VF32(0.0),
       expect: VF32(0.0),
+      shape: ShF32,
       note: "sanity check",
     },
     {
@@ -156,6 +182,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-f32",
       input: VF32(3.5),
       expect: VF32(3.5),
+      shape: ShF32,
       note: "a value exactly representable in f32, to sidestep single-precision rounding when comparing rendered text",
     },
     {
@@ -163,6 +190,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-f64",
       input: VF64(@double.not_a_number),
       expect: VF64(@double.not_a_number),
+      shape: ShF64,
       note: "NaN must round-trip as NaN; see same() in value.mbt for why this needs special comparison",
     },
     {
@@ -170,6 +198,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-f64",
       input: VF64(@double.infinity),
       expect: VF64(@double.infinity),
+      shape: ShF64,
       note: "positive infinity",
     },
     {
@@ -177,6 +206,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-f64",
       input: VF64(@double.neg_infinity),
       expect: VF64(@double.neg_infinity),
+      shape: ShF64,
       note: "negative infinity",
     },
     {
@@ -184,6 +214,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-char",
       input: VChar('a'),
       expect: VChar('a'),
+      shape: ShChar,
       note: "sanity check",
     },
     {
@@ -191,6 +222,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-char",
       input: VChar('\''),
       expect: VChar('\''),
+      shape: ShChar,
       note: "the WAVE grammar requires escaping this char",
     },
     {
@@ -198,6 +230,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-char",
       input: VChar('\n'),
       expect: VChar('\n'),
+      shape: ShChar,
       note: "the WAVE grammar requires escaping this char",
     },
     {
@@ -205,6 +238,7 @@ pub fn scalar_regression_suite() -> Array[Case] {
       function: "echo-char",
       input: VChar('\u{2603}'),
       expect: VChar('\u{2603}'),
+      shape: ShChar,
       note: "a codepoint outside ASCII, to exercise non-escaped multi-byte rendering",
     },
   ]
@@ -232,6 +266,11 @@ fn flags(bits : UInt64) -> Value {
 }
 
 ///|
+fn wide_flags_shape() -> Shape {
+  ShFlags(wide_flags_labels())
+}
+
+///|
 /// The `wit/wide-flags.wit` regression corpus. As of this writing every
 /// one of these cases fails before it can even run, because the fixture
 /// does not build - see the "known finding" in README.md. The corpus
@@ -251,6 +290,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(0UL),
       expect: flags(0UL),
+      shape: wide_flags_shape(),
       note: "no flags set",
     },
     {
@@ -258,6 +298,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(0xFFFFFFFFFUL),
       expect: flags(0xFFFFFFFFFUL),
+      shape: wide_flags_shape(),
       note: "all 36 declared flags set",
     },
     {
@@ -265,6 +306,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(1UL),
       expect: flags(1UL),
+      shape: wide_flags_shape(),
       note: "lowest bit only, entirely within the low word",
     },
     {
@@ -272,6 +314,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(1UL << 31),
       expect: flags(1UL << 31),
+      shape: wide_flags_shape(),
       note: "top bit of the low 32-bit word",
     },
     {
@@ -279,6 +322,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(1UL << 32),
       expect: flags(1UL << 32),
+      shape: wide_flags_shape(),
       note: "bottom bit of the high word; wit-bindgen/wit-bindgen#1517 reported flags past 32 members mis-generating, and this project independently reproduced a parse error in exactly this accessor - see README",
     },
     {
@@ -286,6 +330,7 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
       function: "echo-wide-flags",
       input: flags(1UL << 35),
       expect: flags(1UL << 35),
+      shape: wide_flags_shape(),
       note: "highest declared bit",
     },
   ]
@@ -294,8 +339,9 @@ pub fn wide_flags_regression_suite() -> Array[Case] {
 ///|
 /// Every case from every suite `cmd/main` can run, concatenated. Tests
 /// that check a property of "every case" (names are unique, input equals
-/// expect) iterate this instead of listing each suite by hand, so adding a
-/// new suite here automatically brings it under those checks too.
+/// expect, parsing a case's own rendering recovers it) iterate this
+/// instead of listing each suite by hand, so adding a new suite here
+/// automatically brings it under those checks too.
 pub fn all_regression_suites() -> Array[Case] {
   scalar_regression_suite() +
   wide_flags_regression_suite() +
@@ -310,12 +356,14 @@ pub fn all_regression_suites() -> Array[Case] {
 /// "no value" would still pass a suite that only ever tried `none` and one
 /// arbitrary `some`.
 pub fn option_u32_regression_suite() -> Array[Case] {
+  let shape = ShOption(ShU32)
   [
     {
       name: "option-none",
       function: "echo-option-u32",
       input: VOption(None),
       expect: VOption(None),
+      shape,
       note: "the absent case",
     },
     {
@@ -323,6 +371,7 @@ pub fn option_u32_regression_suite() -> Array[Case] {
       function: "echo-option-u32",
       input: VOption(Some(VU32(0))),
       expect: VOption(Some(VU32(0))),
+      shape,
       note: "present with the payload type's zero value, distinct from none",
     },
     {
@@ -330,6 +379,7 @@ pub fn option_u32_regression_suite() -> Array[Case] {
       function: "echo-option-u32",
       input: VOption(Some(VU32(4294967295))),
       expect: VOption(Some(VU32(4294967295))),
+      shape,
       note: "present with the payload's upper bound",
     },
   ]
@@ -344,12 +394,14 @@ pub fn option_u32_regression_suite() -> Array[Case] {
 /// strings in isolation, but here across a real component boundary rather
 /// than just in `render`.
 pub fn result_u32_string_regression_suite() -> Array[Case] {
+  let shape = ShResult(ok=ShU32, err=ShString)
   [
     {
       name: "result-ok-zero",
       function: "echo-result",
       input: VResult(Ok(VU32(0))),
       expect: VResult(Ok(VU32(0))),
+      shape,
       note: "the ok arm's payload zero value",
     },
     {
@@ -357,6 +409,7 @@ pub fn result_u32_string_regression_suite() -> Array[Case] {
       function: "echo-result",
       input: VResult(Ok(VU32(4294967295))),
       expect: VResult(Ok(VU32(4294967295))),
+      shape,
       note: "the ok arm's payload upper bound",
     },
     {
@@ -364,6 +417,7 @@ pub fn result_u32_string_regression_suite() -> Array[Case] {
       function: "echo-result",
       input: VResult(Err(VString(""))),
       expect: VResult(Err(VString(""))),
+      shape,
       note: "an empty error string, distinct from no error at all",
     },
     {
@@ -371,6 +425,7 @@ pub fn result_u32_string_regression_suite() -> Array[Case] {
       function: "echo-result",
       input: VResult(Err(VString("not found"))),
       expect: VResult(Err(VString("not found"))),
+      shape,
       note: "a representative error message",
     },
     {
@@ -378,6 +433,7 @@ pub fn result_u32_string_regression_suite() -> Array[Case] {
       function: "echo-result",
       input: VResult(Err(VString("say \"hi\""))),
       expect: VResult(Err(VString("say \"hi\""))),
+      shape,
       note: "an error string containing a quote, which WAVE must escape to stay a single string literal",
     },
   ]

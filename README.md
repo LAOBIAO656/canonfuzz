@@ -36,6 +36,15 @@ construction rather than found by random search.
   [wasm-wave README](https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md)
   needed for these types. No code from that project is reproduced here -
   this is an independent implementation against its published grammar.
+- A `Shape` type describing a `Value`'s type-former independently of any
+  particular instance (needed because, e.g., `expect: VOption(None)` alone
+  doesn't say what the payload type would be if a buggy component
+  returned `some(...)` instead), and `parse`, the inverse of `render`:
+  WAVE text plus a `Shape` back to a `Value`, or `None` if the text
+  doesn't match that shape at all (`wave_parse.mbt`). `run_case` in
+  `cmd/main` uses this to compare a real component's output to what was
+  expected structurally, via `same()`, instead of as raw text - see "The
+  comparator now compares structurally" below.
 - A fixed regression corpus per fixture (`cases.mbt`), each a list of named
   boundary or representative values with a note on why the case exists:
   `wit/scalars.wit` (every primitive scalar type), `wit/wide-flags.wit` (a
@@ -74,21 +83,10 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 - Only scalars, one flags type, `option<u32>`, and `result<u32, string>`.
   Records, lists, variants, enums and nested/recursive shapes are not
-  covered - **and adding them needs a comparator upgrade first**, not just
-  more `Value` cases. `run_case` currently compares `wasmtime`'s raw
-  output text against `render(case.expect)` byte-for-byte. That is exact
-  for everything implemented so far, because none of it has more than one
-  way to render correctly. A record has no canonical field order, and
-  floats reachable through a comparison the WAVE grammar doesn't pin down
-  a single textual form for; string comparison would then reject a
-  correct-but-differently-ordered or differently-formatted result as a
-  false "mismatch". Before a record or list fixture is added, `run_case`
-  needs one of: parsing `wasmtime`'s output back into a `Value` and
-  comparing with `same()` instead of text equality; a typed host (e.g. a
-  small Rust `wasmtime::component::bindgen!` driver) instead of
-  string-in-string-out CLI invocation; or a versioned, strictly-specified
-  rendering contract that removes the ambiguity instead of working around
-  it after the fact.
+  covered. The comparator upgrade that used to block them (see "The
+  comparator now compares structurally" below) is done; what's left for
+  each of these is genuinely just authoring the `Value`/`Shape` cases and
+  a fixture, the same shape of work `option`/`result` already were.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -206,6 +204,47 @@ reproduce against `wit-bindgen-cli` 0.62.0 for any boundary value in
 `cases.mbt` - worth recording as a negative result, since a regression
 suite is exactly the place to track a fix staying fixed.
 
+## The comparator now compares structurally
+
+`run_case` used to compare `wasmtime`'s raw output text against
+`render(case.expect)` byte-for-byte. That was exact for every shape
+implemented at the time only because none of them had more than one way
+to render correctly - a record's fields have no canonical order, and nothing
+in WAVE's grammar pins down a single textual form once nesting is
+involved, so text comparison would eventually reject a correct-but-
+differently-ordered or differently-formatted result as a false
+"mismatch." `run_case` now parses `wasmtime`'s output with `parse` and the
+case's own `Shape`, then compares the result to `expect` with `same()` -
+structurally, not as text.
+
+This is more than a hedge against a hypothetical: `wave_parse.mbt` and
+its parser are new, correctness-critical code, so they get the same kind
+of coverage the rest of the project does rather than being trusted on
+sight. `canonfuzz_wbtest.mbt` checks `parse` directly - recovering every
+supported shape, rejecting an out-of-range narrow integer, rejecting
+malformed escapes, rejecting an unknown flag label, rejecting text
+matching neither arm of a result - and `canonfuzz_test.mbt` checks the
+actual property `run_case` depends on: for every case in
+`all_regression_suites()`, `parse(case.shape, render(case.expect))`
+recovers a value `same()` to `case.expect`. If that property ever broke
+for a case, every real component run against that case would misreport a
+correct answer as a mismatch regardless of what `wasmtime` actually
+returned - which is exactly why it's a test on its own, not just implied
+by the fixtures passing in CI.
+
+A component whose output isn't even a valid rendering of the expected
+shape (garbage, or a shape violation) is now its own outcome -
+"unparseable" - distinct from "parsed fine but the value was wrong," so a
+`cmd/main` report can say which one happened instead of only ever
+comparing two opaque strings.
+
+`parse` is deliberately not a general WAVE parser: it only accepts the
+forms `render` itself produces, and it does not handle nested
+`some(...)`/`ok(...)`/`err(...)` wrappers, since nothing in `cases.mbt`
+needs that yet. Extending it will be part of adding whatever compound
+type first needs it (a `list` of `option`, say), not a separate capability
+on its own.
+
 ## Supported environments
 
 | Target | Status |
@@ -232,7 +271,7 @@ against a real host.
 ## License
 
 Apache-2.0, see `LICENSE`. Every file under `wit/` is original to this
-project. The WAVE encoding this project implements a renderer for is
-specified by the `wasm-wave` crate (bytecodealliance/wasm-tools,
+project. The WAVE encoding this project implements a renderer and parser
+for is specified by the `wasm-wave` crate (bytecodealliance/wasm-tools,
 Apache-2.0), linked above; this project does not vendor or reproduce that
 crate's code.

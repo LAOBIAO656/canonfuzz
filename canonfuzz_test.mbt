@@ -37,3 +37,38 @@ test "wide flags cases all use the declared label list" {
     }
   }
 }
+
+///|
+/// The round-trip property `cmd/main` actually depends on: rendering a
+/// case's expected value and parsing that text back with the case's own
+/// `shape` must recover an equal value. This is the property that lets
+/// `run_case` compare structurally instead of as raw text (see README,
+/// "the comparator's ordering limit") - if it failed for any case here,
+/// that case's `shape` would already disagree with its own `expect`, and
+/// every real component run would misreport a correct answer as a
+/// mismatch regardless of what `wasmtime` actually returned.
+test "parsing a case's own rendering recovers the expected value" {
+  for case in all_regression_suites() {
+    let text = render(case.expect)
+    match parse(case.shape, text) {
+      Some(recovered) =>
+        if !same(recovered, case.expect) {
+          fail(
+            "case " +
+            case.name +
+            ": parse(shape, \"" +
+            text +
+            "\") recovered a different value than expect",
+          )
+        }
+      None =>
+        fail(
+          "case " +
+          case.name +
+          ": parse(shape, ...) rejected \"" +
+          text +
+          "\", its own expect rendered",
+        )
+    }
+  }
+}

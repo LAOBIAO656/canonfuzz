@@ -180,3 +180,134 @@ test "same compares results structurally" {
   assert_false(same(VResult(Ok(VU32(1))), VResult(Ok(VU32(2)))))
   assert_false(same(VResult(Ok(VU32(0))), VResult(Err(VString("0")))))
 }
+
+// -- parse -------------------------------------------------------------
+//
+// `render` is checked above against hand-picked expected text. These
+// tests check `parse`, the direction `cmd/main` actually depends on: can
+// it recover a `Value` from text, including text this project did not
+// itself produce (an out-of-range number, a bad escape, an unknown flag
+// label) without raising or returning something wrong. The round-trip
+// property (`parse(shape, render(v))` recovers `v` for every case in
+// every suite) is checked separately in canonfuzz_test.mbt, where it can
+// use the public `all_regression_suites()`.
+
+///|
+test "parse recovers scalars from their own rendering" {
+  assert_true(same_option(parse(ShBool, "true"), Some(VBool(true))))
+  assert_true(same_option(parse(ShS8, "-128"), Some(VS8(-128))))
+  assert_true(
+    same_option(
+      parse(ShU64, "18446744073709551615"),
+      Some(VU64(18446744073709551615UL)),
+    ),
+  )
+  // Uses same_option (NaN-aware), not plain equality: nan == nan is
+  // false, but a parsed "nan" recovering VF64(NaN) is exactly correct.
+  assert_true(
+    same_option(parse(ShF64, "nan"), Some(VF64(@double.not_a_number))),
+  )
+  assert_true(same_option(parse(ShChar, "'a'"), Some(VChar('a'))))
+}
+
+///|
+/// A `u8` is a full `Shape` of its own, not just "any integer" - text
+/// that parses fine as a number but falls outside the type's range must
+/// still be rejected, or a real corruption bug that returns an
+/// out-of-range value would parse "successfully" into some other value
+/// instead of being caught.
+test "parse rejects an out-of-range value for a narrower type" {
+  assert_true(parse(ShU8, "256") is None)
+  assert_true(parse(ShU16, "65536") is None)
+}
+
+///|
+test "parse rejects text that is not a bool at all" {
+  assert_true(parse(ShBool, "True") is None)
+  assert_true(parse(ShBool, "") is None)
+}
+
+///|
+/// `parse` must undo every escape `escape` (in wave.mbt) can produce,
+/// including `\u{...}`, for a char or a string.
+test "parse recovers escaped chars and strings" {
+  assert_true(same_option(parse(ShChar, "'\\''"), Some(VChar('\''))))
+  assert_true(same_option(parse(ShChar, "'\\n'"), Some(VChar('\n'))))
+  assert_true(
+    same_option(parse(ShChar, "'\\u{2603}'"), Some(VChar('\u{2603}'))),
+  )
+  assert_true(
+    same_option(
+      parse(ShString, "\"say \\\"hi\\\"\""),
+      Some(VString("say \"hi\"")),
+    ),
+  )
+  assert_true(same_option(parse(ShString, "\"\""), Some(VString(""))))
+}
+
+///|
+/// A lone trailing backslash and an unterminated `\u{...}` are malformed
+/// escapes, not text to pass through as-is - doing that would silently
+/// turn a real corruption in the escaping logic into a "successful"
+/// parse of the wrong string.
+test "parse rejects malformed escapes" {
+  assert_true(parse(ShString, "\"abc\\\"") is None)
+  assert_true(parse(ShString, "\"\\u{41\"") is None)
+  assert_true(parse(ShChar, "'ab'") is None)
+}
+
+///|
+test "parse recovers flags, including the empty set" {
+  let sh = ShFlags(["a", "b", "c"])
+  assert_true(
+    same_option(parse(sh, "{}"), Some(VFlags(labels=["a", "b", "c"], bits=0UL))),
+  )
+  assert_true(
+    same_option(
+      parse(sh, "{a, c}"),
+      Some(VFlags(labels=["a", "b", "c"], bits=0b101UL)),
+    ),
+  )
+}
+
+///|
+/// A label this suite does not declare - a typo, or a member added
+/// upstream that the fixture hasn't been updated for - must be rejected
+/// rather than silently dropped, which would let a real corruption look
+/// like a clean, if incomplete, set.
+test "parse rejects an unknown flag label" {
+  assert_true(parse(ShFlags(["a", "b"]), "{a, z}") is None)
+}
+
+///|
+test "parse recovers options in both arms" {
+  let sh = ShOption(ShU32)
+  assert_true(same_option(parse(sh, "none"), Some(VOption(None))))
+  assert_true(same_option(parse(sh, "some(0)"), Some(VOption(Some(VU32(0))))))
+}
+
+///|
+/// `wasmtime` never prints the "flat" form of `some` (see the note on
+/// `render` in wave.mbt), so `parse` only needs to accept the explicit
+/// form. A bare payload is correctly rejected as malformed input, not
+/// silently accepted as an alternate spelling of `some`.
+test "parse rejects the flat option form since wasmtime never emits it" {
+  assert_true(parse(ShOption(ShU32), "0") is None)
+}
+
+///|
+test "parse recovers both result arms using their own shapes" {
+  let sh = ShResult(ok=ShU32, err=ShString)
+  assert_true(same_option(parse(sh, "ok(0)"), Some(VResult(Ok(VU32(0))))))
+  assert_true(
+    same_option(parse(sh, "err(\"oops\")"), Some(VResult(Err(VString("oops"))))),
+  )
+}
+
+///|
+/// Text that is not a valid rendering of *either* arm - not just the one
+/// a particular case happened to expect - is malformed input, not a
+/// same()-false mismatch to report as if parsing had succeeded.
+test "parse rejects text matching neither result arm" {
+  assert_true(parse(ShResult(ok=ShU32, err=ShString), "maybe(0)") is None)
+}
