@@ -12,6 +12,8 @@ pub fn option_u32_regression_suite() -> Array[Case]
 
 pub fn parse(Shape, String) -> Value?
 
+pub fn record_point_regression_suite() -> Array[Case]
+
 pub fn render(Value) -> String
 
 pub fn result_u32_string_regression_suite() -> Array[Case]
@@ -55,6 +57,7 @@ pub enum Shape {
   ShFlags(Array[String])
   ShOption(Shape)
   ShResult(ok~ : Shape, err~ : Shape)
+  ShRecord(Array[(String, Shape)])
 } derive(@debug.Debug)
 
 pub enum Value {
@@ -74,6 +77,7 @@ pub enum Value {
   VFlags(labels~ : Array[String], bits~ : UInt64)
   VOption(Value?)
   VResult(Result[Value, Value])
+  VRecord(Array[(String, Value)])
 } derive(@debug.Debug)
 
 // Type aliases

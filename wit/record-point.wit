@@ -1,0 +1,10 @@
+package canonfuzz:record-point@0.1.0;
+
+world canon-record-point {
+    record point {
+        x: s32,
+        y: s32,
+        label: option<string>,
+    }
+    export echo-point: func(v: point) -> point;
+}

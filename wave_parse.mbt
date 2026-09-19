@@ -56,6 +56,7 @@ pub fn parse(shape : Shape, text : String) -> Value? {
     ShFlags(labels) => parse_wave_flags(text, labels)
     ShOption(inner) => parse_wave_option(text, inner)
     ShResult(ok~, err~) => parse_wave_result(text, ok~, err~)
+    ShRecord(field_shapes) => parse_wave_record(text, field_shapes)
   }
 }
 
@@ -177,6 +178,139 @@ fn parse_wave_result(text : String, ok~ : Shape, err~ : Shape) -> Value? {
         parse(err, body).bind(fn(v) { Some(VResult(Err(v))) })
       })
   }
+}
+
+///|
+/// A record's fields may appear in any order and, per the WAVE grammar,
+/// an `option`-typed field whose value is `none` may be omitted entirely
+/// - which is in fact what `wasmtime` itself does on output (confirmed by
+/// hand against `wasmtime` 48.0.2), so an omitted field is filled in as
+/// `none` rather than treated as malformed. A field this shape doesn't
+/// declare is rejected as unknown, and a non-optional field that's
+/// missing is rejected as incomplete, rather than either being silently
+/// accepted.
+///
+/// The special-cased `":"` body is WAVE's own disambiguation for the
+/// all-fields-omitted case (`{:}`, distinct from `{}`, which means an
+/// empty *flags* set) - not exercised by any fixture in `cases.mbt` today
+/// (every record shape here has at least one non-optional field), but
+/// handled so a record that could hit it later doesn't need this
+/// function revisited.
+fn parse_wave_record(
+  text : String,
+  field_shapes : Array[(String, Shape)],
+) -> Value? {
+  strip(text, "{", "}").bind(fn(body) {
+    let present : Array[(String, Value)] = []
+    let normalized = if body == ":" { "" } else { body }
+    if normalized != "" {
+      for entry_text in split_top_level(normalized, ',') {
+        let entry_text = entry_text.trim(chars=" ").to_owned()
+        match split_field_entry(entry_text) {
+          None => return None
+          Some((name, value_text)) =>
+            match find_shape(field_shapes, name) {
+              None => return None
+              Some(field_shape) =>
+                match parse(field_shape, value_text) {
+                  None => return None
+                  Some(value) => present.push((name, value))
+                }
+            }
+        }
+      }
+    }
+    let ordered : Array[(String, Value)] = []
+    for entry in field_shapes {
+      let (name, shape) = entry
+      match find_field(present, name) {
+        Some(value) => ordered.push((name, value))
+        None =>
+          match shape {
+            ShOption(_) => ordered.push((name, VOption(None)))
+            _ => return None
+          }
+      }
+    }
+    Some(VRecord(ordered))
+  })
+}
+
+///|
+fn find_shape(field_shapes : Array[(String, Shape)], name : String) -> Shape? {
+  for entry in field_shapes {
+    let (field_name, shape) = entry
+    if field_name == name {
+      return Some(shape)
+    }
+  }
+  None
+}
+
+///|
+/// Split one already-top-level-comma-separated record entry into its
+/// field name and value text, at the first top-level `:` - always the
+/// field-separating one, since a field name precedes any nested structure
+/// in the entry and WIT identifiers never contain `:`.
+fn split_field_entry(entry : String) -> (String, String)? {
+  let parts = split_top_level(entry, ':')
+  if parts.length() < 2 {
+    None
+  } else {
+    let name = parts[0].trim(chars=" ").to_owned()
+    let rest = parts[1:].join(":")
+    Some((name, rest.trim(chars=" ").to_owned()))
+  }
+}
+
+///|
+/// Split `text` on every top-level occurrence of `sep` - one not inside a
+/// `'...'`/`"..."` literal and not nested inside `(...)`/`{...}`/`[...]` -
+/// so a comma or colon inside a record field's string value never gets
+/// mistaken for a field separator.
+fn split_top_level(text : String, sep : Char) -> Array[String] {
+  let chars = text.to_array()
+  let parts = []
+  let mut depth = 0
+  let mut in_string = false
+  let mut in_char = false
+  let mut current = StringBuilder()
+  let mut i = 0
+  while i < chars.length() {
+    let c = chars[i]
+    if !in_string && !in_char && c == sep && depth == 0 {
+      parts.push(current.to_string())
+      current = StringBuilder()
+    } else {
+      current.write_char(c)
+      if in_string {
+        if c == '\\' && i + 1 < chars.length() {
+          i = i + 1
+          current.write_char(chars[i])
+        } else if c == '"' {
+          in_string = false
+        }
+      } else if in_char {
+        if c == '\\' && i + 1 < chars.length() {
+          i = i + 1
+          current.write_char(chars[i])
+        } else if c == '\'' {
+          in_char = false
+        }
+      } else if c == '"' {
+        in_string = true
+      } else if c == '\'' {
+        in_char = true
+      } else if c == '(' || c == '{' || c == '[' {
+        depth = depth + 1
+      } else if c == ')' || c == '}' || c == ']' {
+        depth = depth - 1
+      }
+    }
+    i = i + 1
+  }
+  parts.push(current.to_string())
+  parts
 }
 
 ///|

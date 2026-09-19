@@ -50,9 +50,13 @@ construction rather than found by random search.
   `wit/scalars.wit` (every primitive scalar type), `wit/wide-flags.wit` (a
   36-member `flags` type, with cases targeting the 32-bit word boundary
   directly), `wit/option-u32.wit` (`none` and `some` at both ends of
-  `u32`'s range), and `wit/result-u32-string.wit` (both arms, including an
+  `u32`'s range), `wit/result-u32-string.wit` (both arms, including an
   empty and a quote-containing error string to exercise WAVE's mandatory
-  string escaping across a real component boundary).
+  string escaping across a real component boundary), and
+  `wit/record-point.wit` (a `record` with two `s32` fields and an
+  `option<string>` field, with cases covering fields given out of
+  declaration order, an omitted `option` field, and a string field
+  containing a comma and a colon).
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -81,12 +85,14 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Only scalars, one flags type, `option<u32>`, and `result<u32, string>`.
-  Records, lists, variants, enums and nested/recursive shapes are not
-  covered. The comparator upgrade that used to block them (see "The
-  comparator now compares structurally" below) is done; what's left for
-  each of these is genuinely just authoring the `Value`/`Shape` cases and
-  a fixture, the same shape of work `option`/`result` already were.
+- Scalars, one flags type, `option<u32>`, `result<u32, string>`, and one
+  flat `record`. Lists, variants, enums, and records nested inside another
+  record, a list, or an `option`/`result` are not covered - `parse`'s
+  option/result handling assumes no nested parentheses inside the
+  wrapper's own parens (see the doc comment on `parse` in
+  `wave_parse.mbt`), which a record wrapped in `option<...>` would
+  violate. Extending that will be part of whichever capability first
+  needs it.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -161,14 +167,26 @@ canonfuzz: running the regression suite against the component
   pass  result-err-escaped
 
 5 passed, 0 failed, 5 total
+
+== record-point ==
+canonfuzz: generating guest bindings for wit/record-point.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  record-label-none
+  pass  record-label-some
+  pass  record-fields-any-order
+  pass  record-label-with-punctuation
+
+4 passed, 0 failed, 4 total
 ```
 
-This run passes overall: the scalars, option-u32 and result-u32-string
-fixtures build and every case round-trips correctly, and the flags fixture's
-build failure is the one already tracked in "A finding along the way" rather
-than a new problem, so it does not fail the run. This exact sequence has run
-and passed in CI on both Linux and macOS - see the Actions tab for the run
-history.
+This run passes overall: every fixture except `wide-flags` builds and every
+case round-trips correctly, and the flags fixture's build failure is the one
+already tracked in "A finding along the way" rather than a new problem, so
+it does not fail the run. This exact sequence has run and passed in CI on
+both Linux and macOS - see the Actions tab for the run history.
 
 ## A finding along the way
 
@@ -239,11 +257,14 @@ shape (garbage, or a shape violation) is now its own outcome -
 comparing two opaque strings.
 
 `parse` is deliberately not a general WAVE parser: it only accepts the
-forms `render` itself produces, and it does not handle nested
-`some(...)`/`ok(...)`/`err(...)` wrappers, since nothing in `cases.mbt`
-needs that yet. Extending it will be part of adding whatever compound
-type first needs it (a `list` of `option`, say), not a separate capability
-on its own.
+forms `render` itself produces. Records get a proper depth- and
+quote-aware splitter (`split_top_level` in `wave_parse.mbt`) precisely
+because a record field's value can itself contain a comma or a colon -
+but `option`/`result` still assume their wrapper's parens contain no
+further nested parens, so a record wrapped in `option<...>` isn't
+handled yet. Extending that will be part of adding whatever capability
+first needs it (a `list` of records, say), not a separate capability on
+its own.
 
 ## Supported environments
 

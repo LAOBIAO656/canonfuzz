@@ -39,7 +39,31 @@ pub fn render(v : Value) -> String {
     VOption(Some(inner)) => "some(" + render(inner) + ")"
     VResult(Ok(inner)) => "ok(" + render(inner) + ")"
     VResult(Err(inner)) => "err(" + render(inner) + ")"
+    VRecord(fields) => render_record(fields)
   }
+}
+
+///|
+/// Render every field explicitly, `{field-a: 1, field-b: "two"}`, in
+/// declaration order. WAVE also allows omitting a `none`-valued `option`
+/// field entirely - which is in fact what `wasmtime` itself does on
+/// output, confirmed by hand against `wasmtime` 48.0.2 - but rendering
+/// every field explicitly here keeps `render` a total function of a
+/// `Value` alone, with no need to know which fields are optional; `parse`
+/// is the side that has to accept the omitted form, since that is what it
+/// actually receives from a real component.
+fn render_record(fields : Array[(String, Value)]) -> String {
+  let mut out = "{"
+  let mut first = true
+  for entry in fields {
+    let (name, value) = entry
+    if !first {
+      out = out + ", "
+    }
+    out = out + name + ": " + render(value)
+    first = false
+  }
+  out + "}"
 }
 
 ///|

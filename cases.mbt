@@ -346,7 +346,8 @@ pub fn all_regression_suites() -> Array[Case] {
   scalar_regression_suite() +
   wide_flags_regression_suite() +
   option_u32_regression_suite() +
-  result_u32_string_regression_suite()
+  result_u32_string_regression_suite() +
+  record_point_regression_suite()
 }
 
 ///|
@@ -435,6 +436,68 @@ pub fn result_u32_string_regression_suite() -> Array[Case] {
       expect: VResult(Err(VString("say \"hi\""))),
       shape,
       note: "an error string containing a quote, which WAVE must escape to stay a single string literal",
+    },
+  ]
+}
+
+///|
+fn record_point_shape() -> Shape {
+  ShRecord([("x", ShS32), ("y", ShS32), ("label", ShOption(ShString))])
+}
+
+///|
+fn point(x : Int, y : Int, label : Value) -> Value {
+  VRecord([("x", VS32(x)), ("y", VS32(y)), ("label", label)])
+}
+
+///|
+/// The `wit/record-point.wit` regression corpus: this is the fixture the
+/// structural comparator (`Shape`/`parse`, see README, "The comparator
+/// now compares structurally") was specifically motivated by, so two
+/// cases here exist to exercise exactly that: `record-fields-any-order`
+/// invokes with fields in a different order than declared (WAVE allows
+/// this on input; the comparator must not care, though `render` itself
+/// always emits declaration order), and `record-label-with-punctuation`
+/// puts a comma and a colon inside the nested string field, which a
+/// naive `split(", ")`-style parser would misread as extra fields.
+pub fn record_point_regression_suite() -> Array[Case] {
+  let shape = record_point_shape()
+  [
+    {
+      name: "record-label-none",
+      function: "echo-point",
+      input: point(-5, 10, VOption(None)),
+      expect: point(-5, 10, VOption(None)),
+      shape,
+      note: "wasmtime omits an option field entirely when it's none, rather than printing it; the comparator must still recover none, not reject the record as incomplete",
+    },
+    {
+      name: "record-label-some",
+      function: "echo-point",
+      input: point(1, 2, VOption(Some(VString("origin")))),
+      expect: point(1, 2, VOption(Some(VString("origin")))),
+      shape,
+      note: "sanity check with every field present",
+    },
+    {
+      name: "record-fields-any-order",
+      function: "echo-point",
+      input: VRecord([
+        ("label", VOption(Some(VString("reordered")))),
+        ("y", VS32(2)),
+        ("x", VS32(1)),
+      ]),
+      expect: point(1, 2, VOption(Some(VString("reordered")))),
+      shape,
+      note: "WAVE allows record fields in any order on input; render() always emits declaration order regardless of how input was built, and the comparator must not depend on wasmtime's output order matching it",
+    },
+    {
+      name: "record-label-with-punctuation",
+      function: "echo-point",
+      input: point(0, 0, VOption(Some(VString("a, b: c \"q\"")))),
+      expect: point(0, 0, VOption(Some(VString("a, b: c \"q\"")))),
+      shape,
+      note: "a comma and a colon inside the nested string field - exactly what split_top_level in wave_parse.mbt exists to not misread as extra fields",
     },
   ]
 }

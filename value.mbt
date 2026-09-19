@@ -16,6 +16,14 @@
 /// `VResult` reuses MoonBit's built-in `Result` rather than inventing a
 /// two-armed variant of its own, since `wit-bindgen` already lowers WIT
 /// `result<T, E>` to exactly `Result[T, E]`.
+///
+/// `VRecord` keeps its fields as an `(name, value)` array in declaration
+/// order for `render` to walk, but - per the WAVE grammar, and confirmed
+/// by hand against `wasmtime` 48.0.2 - field order is not part of a
+/// record's identity: `same` below compares by name, and `wasmtime`
+/// itself both accepts input fields in any order and omits an
+/// `option`-typed field from its output entirely when that field is
+/// `none`, rather than printing `none` explicitly.
 pub enum Value {
   VBool(Bool)
   VS8(Int)
@@ -33,6 +41,7 @@ pub enum Value {
   VFlags(labels~ : Array[String], bits~ : UInt64)
   VOption(Value?)
   VResult(Result[Value, Value])
+  VRecord(Array[(String, Value)])
 } derive(Debug)
 
 ///|
@@ -62,8 +71,40 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VOption(Some(x)), VOption(Some(y))) => same(x, y)
     (VResult(Ok(x)), VResult(Ok(y))) => same(x, y)
     (VResult(Err(x)), VResult(Err(y))) => same(x, y)
+    (VRecord(fx), VRecord(fy)) => same_fields(fx, fy)
     (_, _) => false
   }
+}
+
+///|
+/// Two records are equal if they have the same set of field names, each
+/// naming a `same()`-equal value - independent of the order either side
+/// happens to store its fields in, since WAVE does not consider record
+/// field order part of a value's identity (see the doc comment on
+/// `VRecord`).
+fn same_fields(a : Array[(String, Value)], b : Array[(String, Value)]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for entry in a {
+    let (name, value) = entry
+    match find_field(b, name) {
+      Some(other) => if !same(value, other) { return false }
+      None => return false
+    }
+  }
+  true
+}
+
+///|
+fn find_field(fields : Array[(String, Value)], name : String) -> Value? {
+  for entry in fields {
+    let (field_name, value) = entry
+    if field_name == name {
+      return Some(value)
+    }
+  }
+  None
 }
 
 ///|
@@ -107,4 +148,5 @@ pub enum Shape {
   ShFlags(Array[String])
   ShOption(Shape)
   ShResult(ok~ : Shape, err~ : Shape)
+  ShRecord(Array[(String, Shape)])
 } derive(Debug)

@@ -311,3 +311,109 @@ test "parse recovers both result arms using their own shapes" {
 test "parse rejects text matching neither result arm" {
   assert_true(parse(ShResult(ok=ShU32, err=ShString), "maybe(0)") is None)
 }
+
+// -- records -------------------------------------------------------------
+
+///|
+fn point_shape() -> Shape {
+  ShRecord([("x", ShS32), ("y", ShS32), ("label", ShOption(ShString))])
+}
+
+///|
+test "render renders every record field explicitly, in declaration order" {
+  let v = VRecord([
+    ("x", VS32(1)),
+    ("y", VS32(2)),
+    ("label", VOption(Some(VString("hi")))),
+  ])
+  assert_eq(render(v), "{x: 1, y: 2, label: some(\"hi\")}")
+}
+
+///|
+/// `same` compares records by field name, not by the order either side's
+/// `Value` happens to store them in - `render` always emits declaration
+/// order, but nothing should depend on that for correctness.
+test "same compares records by field name, independent of storage order" {
+  let a = VRecord([("x", VS32(1)), ("y", VS32(2))])
+  let b = VRecord([("y", VS32(2)), ("x", VS32(1))])
+  assert_true(same(a, b))
+  let c = VRecord([("x", VS32(1)), ("y", VS32(3))])
+  assert_false(same(a, c))
+}
+
+///|
+/// `same` also rejects records with a different set of field names
+/// entirely, rather than only comparing the fields both sides happen to
+/// share.
+test "same rejects records with different field sets" {
+  let a = VRecord([("x", VS32(1)), ("y", VS32(2))])
+  let b = VRecord([("x", VS32(1))])
+  assert_false(same(a, b))
+}
+
+///|
+/// `parse` must accept fields in any order - `wasmtime` output happens to
+/// be declaration order (confirmed by hand), but the WAVE grammar does
+/// not require it, and nothing here should depend on the specific
+/// implementation's ordering choice.
+test "parse recovers a record with fields in any order" {
+  let expected = VRecord([
+    ("x", VS32(1)),
+    ("y", VS32(2)),
+    ("label", VOption(Some(VString("hi")))),
+  ])
+  assert_true(
+    same_option(
+      parse(point_shape(), "{y: 2, label: some(\"hi\"), x: 1}"),
+      Some(expected),
+    ),
+  )
+}
+
+///|
+/// `wasmtime` omits an `option`-typed field entirely when it's `none`
+/// (confirmed by hand against `wasmtime` 48.0.2) rather than printing
+/// `label: none` - `parse` must fill the field in as `none`, not reject
+/// the record as incomplete.
+test "parse fills in an omitted option field as none" {
+  let expected = VRecord([
+    ("x", VS32(1)),
+    ("y", VS32(2)),
+    ("label", VOption(None)),
+  ])
+  assert_true(same_option(parse(point_shape(), "{x: 1, y: 2}"), Some(expected)))
+}
+
+///|
+/// A record value can itself contain a comma or colon inside a nested
+/// string - the exact scenario `split_top_level` exists for. Getting this
+/// wrong would misread the string's contents as a second field.
+test "parse handles a comma and colon inside a nested string field" {
+  let expected = VRecord([
+    ("x", VS32(1)),
+    ("y", VS32(2)),
+    ("label", VOption(Some(VString("a, b: c")))),
+  ])
+  assert_true(
+    same_option(
+      parse(point_shape(), "{x: 1, y: 2, label: some(\"a, b: c\")}"),
+      Some(expected),
+    ),
+  )
+}
+
+///|
+/// A field this shape does not declare - a typo, or a member added
+/// upstream this suite hasn't been updated for - is malformed input, not
+/// something to silently ignore.
+test "parse rejects an unknown record field" {
+  assert_true(parse(point_shape(), "{x: 1, y: 2, z: 3, label: none}") is None)
+}
+
+///|
+/// A missing *non-optional* field is genuinely incomplete, unlike an
+/// omitted `option` field - WAVE only allows omitting `option`-typed
+/// fields whose value is `none`.
+test "parse rejects a record missing a non-optional field" {
+  assert_true(parse(point_shape(), "{x: 1}") is None)
+}
