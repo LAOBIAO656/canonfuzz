@@ -34,6 +34,7 @@ jobs:
           irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
           Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.moon\bin"
 
+      - run: moon update
       - run: moon test -p LAOBIAO656/canonfuzz --target ${{ matrix.target }}
 
   # The full pipeline: cmd/main drives real wit-bindgen, moon, wasm-tools
@@ -79,4 +80,5 @@ jobs:
 
       - run: wit-bindgen --version && wasm-tools --version && wasmtime --version
 
+      - run: moon update
       - run: moon run cmd/main --target native
