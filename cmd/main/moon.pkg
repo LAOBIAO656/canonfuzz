@@ -1,0 +1,11 @@
+import {
+  "LAOBIAO656/canonfuzz",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/abort",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")

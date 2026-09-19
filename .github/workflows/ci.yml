@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The toolchain-independent core (value.mbt, wave.mbt, cases.mbt): no
+  # external tool dependency, so this runs on every MoonBit target on every
+  # OS. `-p LAOBIAO656/canonfuzz` scopes `moon test` to this package only,
+  # so it does not also try to build the native-only cmd/main package.
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        target: [wasm, wasm-gc, js, native]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Install MoonBit (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          Add-Content $env:GITHUB_PATH "$env:USERPROFILE\.moon\bin"
+
+      - run: moon test -p LAOBIAO656/canonfuzz --target ${{ matrix.target }}
+
+  # The full pipeline: cmd/main drives real wit-bindgen, moon, wasm-tools
+  # and wasmtime binaries against wit/scalars.wit. Linux and macOS only -
+  # cmd/main depends on moonbitlang/async's process support, which its own
+  # documentation states currently targets native/LLVM on Linux/macOS.
+  pipeline:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64-linux
+          - os: macos-latest
+            arch: aarch64-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Install wit-bindgen, wasm-tools and wasmtime
+        run: |
+          set -eu
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -fsSL -o wit-bindgen.tar.gz \
+            "https://github.com/bytecodealliance/wit-bindgen/releases/latest/download/wit-bindgen-0.62.0-${{ matrix.arch }}.tar.gz"
+          tar xzf wit-bindgen.tar.gz
+          cp wit-bindgen-*/wit-bindgen "$HOME/.local/bin/"
+          curl -fsSL -o wasm-tools.tar.gz \
+            "https://github.com/bytecodealliance/wasm-tools/releases/latest/download/wasm-tools-1.259.0-${{ matrix.arch }}.tar.gz"
+          tar xzf wasm-tools.tar.gz
+          cp wasm-tools-*/wasm-tools "$HOME/.local/bin/"
+          curl -fsSL -o wasmtime.tar.xz \
+            "https://github.com/bytecodealliance/wasmtime/releases/latest/download/wasmtime-v48.0.2-${{ matrix.arch }}.tar.xz"
+          tar xJf wasmtime.tar.xz
+          cp wasmtime-*/wasmtime "$HOME/.local/bin/"
+          chmod +x "$HOME/.local/bin/"*
+
+      - run: wit-bindgen --version && wasm-tools --version && wasmtime --version
+
+      - run: moon run cmd/main --target native

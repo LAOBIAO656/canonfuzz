@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "LAOBIAO656/canonfuzz"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn render(Value) -> String
+
+pub fn same(Value, Value) -> Bool
+
+pub fn scalar_regression_suite() -> Array[Case]
+
+// Errors
+
+// Types and methods
+pub struct Case {
+  name : String
+  function : String
+  input : Value
+  expect : Value
+  note : String
+} derive(@debug.Debug)
+
+pub enum Value {
+  VBool(Bool)
+  VS8(Int)
+  VS16(Int)
+  VS32(Int)
+  VS64(Int64)
+  VU8(Byte)
+  VU16(UInt)
+  VU32(UInt)
+  VU64(UInt64)
+  VF32(Float)
+  VF64(Double)
+  VChar(Char)
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits

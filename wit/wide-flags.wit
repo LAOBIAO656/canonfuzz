@@ -1,0 +1,11 @@
+package canonfuzz:wide-flags@0.1.0;
+
+world canon-wide-flags {
+    flags wide-flags {
+        bit-00, bit-01, bit-02, bit-03, bit-04, bit-05, bit-06, bit-07, bit-08, bit-09,
+        bit-10, bit-11, bit-12, bit-13, bit-14, bit-15, bit-16, bit-17, bit-18, bit-19,
+        bit-20, bit-21, bit-22, bit-23, bit-24, bit-25, bit-26, bit-27, bit-28, bit-29,
+        bit-30, bit-31, bit-32, bit-33, bit-34, bit-35,
+    }
+    export echo-wide-flags: func(v: wide-flags) -> wide-flags;
+}
