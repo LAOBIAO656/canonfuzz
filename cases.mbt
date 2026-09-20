@@ -348,7 +348,8 @@ pub fn all_regression_suites() -> Array[Case] {
   option_u32_regression_suite() +
   result_u32_string_regression_suite() +
   record_point_regression_suite() +
-  list_u32_regression_suite()
+  list_u32_regression_suite() +
+  variant_match_result_regression_suite()
 }
 
 ///|
@@ -535,6 +536,52 @@ pub fn list_u32_regression_suite() -> Array[Case] {
       expect: VList([VU32(0), VU32(1), VU32(2)]),
       shape,
       note: "element order must be preserved, not just element membership",
+    },
+  ]
+}
+
+///|
+fn match_result_shape() -> Shape {
+  ShVariant([
+    ("none", None),
+    ("exact", Some(ShString)),
+    ("partial", Some(ShU32)),
+  ])
+}
+
+///|
+/// The `wit/variant-match-result.wit` regression corpus. `match-none`
+/// matters specifically because the case is *named* `none` - the same
+/// word as the `option` "empty" keyword - so it directly exercises the
+/// `%`-escaping WAVE requires for a variant case name that collides with
+/// a keyword (confirmed by hand that `wasmtime` requires `%none` on
+/// input and produces it on output, not the bare word).
+pub fn variant_match_result_regression_suite() -> Array[Case] {
+  let shape = match_result_shape()
+  [
+    {
+      name: "match-none",
+      function: "echo-match-result",
+      input: VVariant(case_name="none", payload=None),
+      expect: VVariant(case_name="none", payload=None),
+      shape,
+      note: "a case named the same as the option \"empty\" keyword - must round-trip as %none, not none",
+    },
+    {
+      name: "match-exact",
+      function: "echo-match-result",
+      input: VVariant(case_name="exact", payload=Some(VString("needle"))),
+      expect: VVariant(case_name="exact", payload=Some(VString("needle"))),
+      shape,
+      note: "a case with a string payload",
+    },
+    {
+      name: "match-partial",
+      function: "echo-match-result",
+      input: VVariant(case_name="partial", payload=Some(VU32(5))),
+      expect: VVariant(case_name="partial", payload=Some(VU32(5))),
+      shape,
+      note: "a case with a numeric payload, to check that different cases' payload shapes are each used correctly, not just the first case declared",
     },
   ]
 }

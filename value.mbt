@@ -2,10 +2,13 @@
 /// A single WIT value that `canonfuzz` knows how to carry across a
 /// component boundary: the primitive numeric types, `bool`, `char` and
 /// `string` (the scalar regression suite in `cases.mbt`), `flags` (the
-/// `wide-flags` suite), `option<T>` (the `option-u32` suite), and
-/// `result<T, E>` for any `T`/`E` this type can already represent (the
-/// `result-u32-string` suite). Records, lists, variants, enums and
-/// resources are planned; see the roadmap in README.md.
+/// `wide-flags` suite), `option<T>` (the `option-u32` suite),
+/// `result<T, E>` (the `result-u32-string` suite), `record` (the
+/// `record-point` suite), `list<T>` (the `list-u32` suite), and
+/// `variant` (the `variant-match-result` suite; a plain `enum` is just a
+/// `variant` where every case's payload is `None`, so it needs no
+/// separate representation). Nested compound shapes and resources are
+/// planned; see the roadmap in README.md.
 ///
 /// `VFlags` carries its own label list rather than referring to some
 /// external schema, because WAVE renders a flags value as the set of its
@@ -43,7 +46,17 @@ pub enum Value {
   VResult(Result[Value, Value])
   VRecord(Array[(String, Value)])
   VList(Array[Value])
+  VVariant(case_name~ : String, payload~ : Value?)
 } derive(Debug)
+
+///|
+/// WAVE keywords that a variant or enum case name must be prefixed with
+/// `%` to use, since the bare word would otherwise parse as the keyword
+/// itself (`none`, most notably, since it is also a perfectly ordinary
+/// case name to want - see `wit/variant-match-result.wit`).
+let wave_keywords : Array[String] = [
+  "true", "false", "inf", "nan", "some", "none", "ok", "err",
+]
 
 ///|
 /// Structural equality for [Value], with IEEE-754 NaN treated as equal to
@@ -74,6 +87,8 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VResult(Err(x)), VResult(Err(y))) => same(x, y)
     (VRecord(fx), VRecord(fy)) => same_fields(fx, fy)
     (VList(xs), VList(ys)) => same_elements(xs, ys)
+    (VVariant(case_name=cx, payload=px), VVariant(case_name=cy, payload=py)) =>
+      cx == cy && same_option(px, py)
     (_, _) => false
   }
 }
@@ -168,4 +183,8 @@ pub enum Shape {
   ShResult(ok~ : Shape, err~ : Shape)
   ShRecord(Array[(String, Shape)])
   ShList(Shape)
+  /// Each case's optional payload shape; `None` for a case with no
+  /// payload. A plain `enum` is represented as a `ShVariant` where every
+  /// entry's payload shape is `None`.
+  ShVariant(Array[(String, Shape?)])
 } derive(Debug)

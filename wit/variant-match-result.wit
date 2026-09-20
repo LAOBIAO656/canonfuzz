@@ -1,0 +1,10 @@
+package canonfuzz:variant-match-result@0.1.0;
+
+world canon-variant-match-result {
+    variant match-result {
+        none,
+        exact(string),
+        partial(u32),
+    }
+    export echo-match-result: func(v: match-result) -> match-result;
+}

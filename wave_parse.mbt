@@ -58,7 +58,39 @@ pub fn parse(shape : Shape, text : String) -> Value? {
     ShResult(ok~, err~) => parse_wave_result(text, ok~, err~)
     ShRecord(field_shapes) => parse_wave_record(text, field_shapes)
     ShList(element) => parse_wave_list(text, element)
+    ShVariant(cases) => parse_wave_variant(text, cases)
   }
+}
+
+///|
+/// Try each declared case in order, matching its (possibly `%`-prefixed,
+/// see `render_variant` in wave.mbt) label against `text` exactly - not
+/// as a prefix - so one case name can never be mistaken for another that
+/// happens to start with the same letters. Text matching no declared
+/// case at all is malformed input: a component returning a case this
+/// suite doesn't know about is exactly the kind of divergence this
+/// project exists to catch, not to shrug off as "close enough."
+fn parse_wave_variant(text : String, cases : Array[(String, Shape?)]) -> Value? {
+  for entry in cases {
+    let (name, payload_shape) = entry
+    let label = if wave_keywords.contains(name) { "%" + name } else { name }
+    match payload_shape {
+      None =>
+        if text == label {
+          return Some(VVariant(case_name=name, payload=None))
+        }
+      Some(inner_shape) =>
+        match strip(text, label + "(", ")") {
+          Some(body) =>
+            match parse(inner_shape, body) {
+              Some(v) => return Some(VVariant(case_name=name, payload=Some(v)))
+              None => ()
+            }
+          None => ()
+        }
+    }
+  }
+  None
 }
 
 ///|

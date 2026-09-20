@@ -85,6 +85,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.list_u32_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "variant-match-result",
+      wit_file: "wit/variant-match-result.wit",
+      world: "canon-variant-match-result",
+      echo_pkg_dir: "gen/world/canon-variant-match-result",
+      echo_impl: VARIANT_MATCH_RESULT_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/variant-match-result",
+      cases: @canonfuzz.variant_match_result_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -361,6 +371,16 @@ const RECORD_POINT_ECHO_IMPL =
 const LIST_U32_ECHO_IMPL =
   #|///|
   #|pub fn echo_list_u32(v : FixedArray[UInt]) -> FixedArray[UInt] { v }
+  #|
+
+///|
+const VARIANT_MATCH_RESULT_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_match_result(
+  #|  v : @canon-variant-match-result.MatchResult,
+  #|) -> @canon-variant-match-result.MatchResult {
+  #|  v
+  #|}
   #|
 
 ///|

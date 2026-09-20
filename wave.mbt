@@ -41,6 +41,24 @@ pub fn render(v : Value) -> String {
     VResult(Err(inner)) => "err(" + render(inner) + ")"
     VRecord(fields) => render_record(fields)
     VList(elements) => render_list(elements)
+    VVariant(case_name~, payload~) => render_variant(case_name, payload)
+  }
+}
+
+///|
+/// A case name that collides with a WAVE keyword (most notably `none`,
+/// which is both a perfectly ordinary case name and the `option` "empty"
+/// keyword) must be prefixed with `%` - confirmed by hand that `wasmtime`
+/// both requires this on input and produces it on output.
+fn render_variant(case_name : String, payload : Value?) -> String {
+  let label = if wave_keywords.contains(case_name) {
+    "%" + case_name
+  } else {
+    case_name
+  }
+  match payload {
+    None => label
+    Some(inner) => label + "(" + render(inner) + ")"
   }
 }
 

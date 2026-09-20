@@ -28,11 +28,13 @@ construction rather than found by random search.
 ## What's implemented
 
 - A `Value` type covering the primitive WIT scalars (`bool`, `s8`..`s64`,
-  `u8`..`u64`, `f32`, `f64`, `char`, `string`), `flags`, `option<T>`, and
-  `result<T, E>` for any `T`/`E` it can already represent, plus a
-  WAVE-text renderer for all of them (`value.mbt`, `wave.mbt`). WAVE is
-  the text encoding `wasmtime run --invoke` reads and writes; the grammar
-  this implements is the subset described in bytecodealliance/wasm-tools'
+  `u8`..`u64`, `f32`, `f64`, `char`, `string`), `flags`, `option<T>`,
+  `result<T, E>`, `record`, `list<T>`, and `variant` (a plain `enum`
+  needs no separate representation - it is just a `variant` where every
+  case's payload is `None`), plus a WAVE-text renderer for all of them
+  (`value.mbt`, `wave.mbt`). WAVE is the text encoding `wasmtime run
+  --invoke` reads and writes; the grammar this implements is the subset
+  described in bytecodealliance/wasm-tools'
   [wasm-wave README](https://github.com/bytecodealliance/wasm-tools/blob/main/crates/wasm-wave/README.md)
   needed for these types. No code from that project is reproduced here -
   this is an independent implementation against its published grammar.
@@ -56,9 +58,13 @@ construction rather than found by random search.
   `wit/record-point.wit` (a `record` with two `s32` fields and an
   `option<string>` field, with cases covering fields given out of
   declaration order, an omitted `option` field, and a string field
-  containing a comma and a colon), and `wit/list-u32.wit` (the empty
-  list, a single element, and a case checking that element order - not
-  just element membership - is preserved).
+  containing a comma and a colon), `wit/list-u32.wit` (the empty list, a
+  single element, and a case checking that element order - not just
+  element membership - is preserved), and `wit/variant-match-result.wit`
+  (a three-case variant, one case with no payload, two with different
+  payload types, where the no-payload case is deliberately named `none` -
+  the same word as the `option` "empty" keyword - to exercise WAVE's
+  mandatory `%` escaping for a colliding case name).
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -87,10 +93,11 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Scalars, one flags type, `option<u32>`, `result<u32, string>`, one flat
-  `record`, and one flat `list`. Variants, enums, and anything nested -
-  a record inside a list, a list inside an option, an option-of-record -
-  are not covered. `parse`'s option/result handling in particular still
+- Every WIT type-former now has at least one flat fixture: scalars, one
+  flags type, `option<u32>`, `result<u32, string>`, one flat `record`,
+  one flat `list`, and one flat `variant`. Only nesting is left - a
+  record inside a list, a list inside an option, an option-of-record, and
+  so on. `parse`'s option/result/variant handling in particular still
   assumes no nested parentheses inside the wrapper's own parens (see the
   doc comment on `parse` in `wave_parse.mbt`), which a record or list
   wrapped in `option<...>` would violate. Extending that will be part of
@@ -192,6 +199,18 @@ canonfuzz: running the regression suite against the component
   pass  list-empty
   pass  list-single
   pass  list-several
+
+3 passed, 0 failed, 3 total
+
+== variant-match-result ==
+canonfuzz: generating guest bindings for wit/variant-match-result.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  match-none
+  pass  match-exact
+  pass  match-partial
 
 3 passed, 0 failed, 3 total
 ```

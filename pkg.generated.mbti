@@ -26,6 +26,8 @@ pub fn same_option(Value?, Value?) -> Bool
 
 pub fn scalar_regression_suite() -> Array[Case]
 
+pub fn variant_match_result_regression_suite() -> Array[Case]
+
 pub fn wide_flags_labels() -> Array[String]
 
 pub fn wide_flags_regression_suite() -> Array[Case]
@@ -61,6 +63,7 @@ pub enum Shape {
   ShResult(ok~ : Shape, err~ : Shape)
   ShRecord(Array[(String, Shape)])
   ShList(Shape)
+  ShVariant(Array[(String, Shape?)])
 } derive(@debug.Debug)
 
 pub enum Value {
@@ -82,6 +85,7 @@ pub enum Value {
   VResult(Result[Value, Value])
   VRecord(Array[(String, Value)])
   VList(Array[Value])
+  VVariant(case_name~ : String, payload~ : Value?)
 } derive(@debug.Debug)
 
 // Type aliases

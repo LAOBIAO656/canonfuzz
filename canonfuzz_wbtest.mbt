@@ -469,3 +469,100 @@ test "parse handles a comma inside a nested string element" {
     ),
   )
 }
+
+// -- variants ----------------------------------------------------------
+//
+// match_result_shape() is defined in cases.mbt and reused here, since
+// it's the same shape wit/variant-match-result.wit's real cases use -
+// two definitions of the same shape drifting apart would be exactly the
+// kind of mismatch these tests exist to prevent.
+
+///|
+/// A no-payload case renders as its bare name; a with-payload case
+/// renders as `name(...)`, the same convention `option`/`result` already
+/// use (they are, after all, two-case variants).
+test "render renders variant cases with and without a payload" {
+  assert_eq(
+    render(VVariant(case_name="exact", payload=Some(VString("hi")))),
+    "exact(\"hi\")",
+  )
+  assert_eq(
+    render(VVariant(case_name="partial", payload=Some(VU32(5)))),
+    "partial(5)",
+  )
+}
+
+///|
+/// A case name that collides with a WAVE keyword - `none` is both an
+/// ordinary case name someone would actually choose and the `option`
+/// "empty" keyword - must render with a `%` prefix, confirmed by hand
+/// against `wasmtime` 48.0.2 (which requires it on input and produces it
+/// on output).
+test "render escapes a variant case name that collides with a keyword" {
+  assert_eq(render(VVariant(case_name="none", payload=None)), "%none")
+}
+
+///|
+/// `same` for variants must compare the case name first - two cases with
+/// coincidentally `same()`-equal payloads (or two no-payload cases with
+/// different names) must never compare equal.
+test "same compares variants by case name, then by payload" {
+  assert_true(
+    same(
+      VVariant(case_name="exact", payload=Some(VString("a"))),
+      VVariant(case_name="exact", payload=Some(VString("a"))),
+    ),
+  )
+  assert_false(
+    same(
+      VVariant(case_name="exact", payload=Some(VString("a"))),
+      VVariant(case_name="exact", payload=Some(VString("b"))),
+    ),
+  )
+  assert_false(
+    same(
+      VVariant(case_name="none", payload=None),
+      VVariant(case_name="exact", payload=Some(VString(""))),
+    ),
+  )
+}
+
+///|
+test "parse recovers every declared variant case" {
+  let sh = match_result_shape()
+  assert_true(
+    same_option(
+      parse(sh, "%none"),
+      Some(VVariant(case_name="none", payload=None)),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(sh, "exact(\"hi\")"),
+      Some(VVariant(case_name="exact", payload=Some(VString("hi")))),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(sh, "partial(5)"),
+      Some(VVariant(case_name="partial", payload=Some(VU32(5)))),
+    ),
+  )
+}
+
+///|
+/// Text naming a case this shape does not declare - a typo, or a case
+/// added upstream this suite hasn't been updated for - is malformed
+/// input, not something to guess at.
+test "parse rejects a variant case name the shape does not declare" {
+  assert_true(parse(match_result_shape(), "unknown-case") is None)
+}
+
+///|
+/// The unescaped keyword `none` must not be accepted in place of the
+/// case actually named `none` - accepting it would make `parse` more
+/// lenient than `wasmtime` itself, hiding a real formatting divergence
+/// rather than catching it.
+test "parse rejects the unescaped keyword form of a colliding case name" {
+  assert_true(parse(match_result_shape(), "none") is None)
+}
