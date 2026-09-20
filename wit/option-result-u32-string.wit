@@ -1,0 +1,5 @@
+package canonfuzz:option-result-u32-string@0.1.0;
+
+world canon-option-result-u32-string {
+    export echo-option-result: func(v: option<result<u32, string>>) -> option<result<u32, string>>;
+}

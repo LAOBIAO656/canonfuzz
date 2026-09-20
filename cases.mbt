@@ -350,7 +350,8 @@ pub fn all_regression_suites() -> Array[Case] {
   record_point_regression_suite() +
   list_u32_regression_suite() +
   variant_match_result_regression_suite() +
-  list_point_regression_suite()
+  list_point_regression_suite() +
+  option_result_u32_string_regression_suite()
 }
 
 ///|
@@ -628,6 +629,54 @@ pub fn list_point_regression_suite() -> Array[Case] {
       expect: VList([nested_point(1, 2), nested_point(-3, 4)]),
       shape,
       note: "two records in one list - each record's own comma and the list's separating comma must both be recognized correctly",
+    },
+  ]
+}
+
+///|
+/// The `wit/option-result-u32-string.wit` regression corpus:
+/// `option<result<u32, string>>`, two paren-using wrappers nested inside
+/// each other. `parse`'s `option`/`result` handling was believed to need
+/// generalizing before this would work (see "Nesting" in README.md) -
+/// it didn't: `strip` trims a fixed-length prefix/suffix rather than
+/// matching brackets, so the text between is handed to the inner `parse`
+/// unchanged no matter what parens it contains. This suite exists to
+/// confirm that against a real component, the same way `list-point`
+/// confirmed `list<record>` needed nothing either.
+pub fn option_result_u32_string_regression_suite() -> Array[Case] {
+  let shape = ShOption(ShResult(ok=ShU32, err=ShString))
+  [
+    {
+      name: "option-result-none",
+      function: "echo-option-result",
+      input: VOption(None),
+      expect: VOption(None),
+      shape,
+      note: "the absent case, same as option-u32's",
+    },
+    {
+      name: "option-result-some-ok-zero",
+      function: "echo-option-result",
+      input: VOption(Some(VResult(Ok(VU32(0))))),
+      expect: VOption(Some(VResult(Ok(VU32(0))))),
+      shape,
+      note: "present, ok arm, payload zero value",
+    },
+    {
+      name: "option-result-some-ok-max",
+      function: "echo-option-result",
+      input: VOption(Some(VResult(Ok(VU32(4294967295))))),
+      expect: VOption(Some(VResult(Ok(VU32(4294967295))))),
+      shape,
+      note: "present, ok arm, payload upper bound",
+    },
+    {
+      name: "option-result-some-err",
+      function: "echo-option-result",
+      input: VOption(Some(VResult(Err(VString("not found"))))),
+      expect: VOption(Some(VResult(Err(VString("not found"))))),
+      shape,
+      note: "present, err arm - three levels of wrapper (option, result, string) all at once",
     },
   ]
 }

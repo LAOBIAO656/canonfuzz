@@ -65,8 +65,10 @@ construction rather than found by random search.
   payload types, where the no-payload case is deliberately named `none` -
   the same word as the `option` "empty" keyword - to exercise WAVE's
   mandatory `%` escaping for a colliding case name), and
-  `wit/list-point.wit` (a `list<record>` - the first nested fixture; see
-  "Nesting" below for why this one needed no code changes).
+  `wit/list-point.wit` (a `list<record>`) and
+  `wit/option-result-u32-string.wit` (`option<result<u32, string>>`, two
+  paren-using wrappers nested inside each other) - see "Nesting" below
+  for why neither needed any code changes.
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -95,15 +97,16 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Every WIT type-former has at least one fixture, including one nested
-  one (`list<record>`, see "Nesting" below). Not yet covered: a record or
-  list nested inside an `option`/`result`/`variant` specifically -
-  `parse`'s handling of those three still assumes no nested parentheses
-  inside the wrapper's own parens (see the doc comment on `parse` in
-  `wave_parse.mbt`), and a record/list wrapped that way would need that
-  fixed first, unlike `list<record>`, which used `{}`/`[]` and needed
-  nothing. Extending that will be part of whichever capability first
-  needs it.
+- Every WIT type-former has at least one fixture, including two nested
+  ones (`list<record>` and `option<result<u32, string>>` - see "Nesting"
+  below; nesting turned out to need no code changes at all, for either
+  combination). Not yet exercised by a fixture: three or more levels of
+  nesting in one shape, and a `variant` case or `record` field whose own
+  value is itself a `variant` - `parse`/`render` dispatch generically on
+  `Shape`/`Value` with no type-specific special-casing beyond what's
+  already confirmed, so these are expected to work unchanged too, but
+  "expected to" is exactly the kind of claim this project exists to
+  check rather than trust.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -226,6 +229,19 @@ canonfuzz: running the regression suite against the component
   pass  list-point-several
 
 2 passed, 0 failed, 2 total
+
+== option-result-u32-string ==
+canonfuzz: generating guest bindings for wit/option-result-u32-string.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  option-result-none
+  pass  option-result-some-ok-zero
+  pass  option-result-some-ok-max
+  pass  option-result-some-err
+
+4 passed, 0 failed, 4 total
 ```
 
 This run passes overall: every fixture except `wide-flags` builds and every
@@ -306,33 +322,42 @@ comparing two opaque strings.
 forms `render` itself produces. Records get a proper depth- and
 quote-aware splitter (`split_top_level` in `wave_parse.mbt`) precisely
 because a record field's value can itself contain a comma or a colon -
-`option`/`result`/`variant` still assume their wrapper's parens contain
-no further nested parens, so wrapping *one of those three* inside
-another isn't handled yet (see "Nesting" below for why that limit turned
-out narrower than it first looked).
+see "Nesting" below for what nesting `option`/`result`/`variant` inside
+each other or inside a record/list actually needs, which turned out to
+be nothing.
 
 ## Nesting
 
 `list<record>` (`wit/list-point.wit`) needed no changes to `parse` or
 `render` at all - it already worked the moment `list<T>` and `record`
-each existed on their own. That's not an accident: a record uses
-`{}` and a list uses `[]`, and `split_top_level` already tracks bracket
-depth generically across all three bracket kinds, so a list of records
-was never actually blocked by the limitation described above - only
-nesting `option`/`result`/`variant` inside *each other* is, since all
-three share `()`. `canonfuzz_wbtest.mbt` checks the list-of-records case
-directly (including the empty case and getting each record's internal
-comma right without swallowing the list's separating comma), confirming
-this was already true rather than assuming it from the bracket
-characters alone.
+each existed on their own. That's not an accident: a record uses `{}`
+and a list uses `[]`, and `split_top_level` already tracks bracket depth
+generically across all three bracket kinds, so a list of records was
+never actually blocked by anything.
 
-So the actual remaining gap is narrower than "nesting" as a whole: only
-a same-bracket-family combination - `option<result<...>>`,
-`result<option<...>>`, a variant case whose payload is itself a variant,
-and so on - needs `parse`'s option/result/variant handling generalized
-to find a *matching* closing paren instead of just the last one in the
-text, the same way `split_top_level` already finds matching brackets for
-records and lists.
+The seemingly harder case - `option<result<u32, string>>`
+(`wit/option-result-u32-string.wit`), two `()`-using wrappers nested
+inside each other - turned out to need nothing either, which is not what
+an earlier version of this document claimed. The reasoning behind that
+claim was wrong: it assumed `strip` would need to find a *matching*
+closing paren to handle nesting, the same way `split_top_level` finds
+matching brackets for records and lists. But `strip` was never written
+that way - it trims a fixed-length prefix and a one-character suffix,
+and hands whatever text is left in the middle to the inner `parse`
+completely unexamined. That middle text can contain any number of its
+own parens, at any depth, without `strip` ever looking at them, so
+nesting was free the whole time. `canonfuzz_wbtest.mbt` checks this
+directly, and `wit/option-result-u32-string.wit` confirms it against a
+real component the same way `list-point` confirmed `list<record>`.
+
+What's left is not a known architectural gap so much as an absence of
+evidence: three or more levels of nesting in one shape, and a `variant`
+case or `record` field whose value is itself a `variant`, are not
+exercised by any fixture yet. Nothing in `parse`/`render` special-cases
+depth or type-former identity, so the same reasoning says these should
+also already work - but that is exactly the kind of claim this project
+exists to check by building the fixture, not to assert from how the code
+reads.
 
 ## Supported environments
 

@@ -12,6 +12,8 @@ pub fn list_point_regression_suite() -> Array[Case]
 
 pub fn list_u32_regression_suite() -> Array[Case]
 
+pub fn option_result_u32_string_regression_suite() -> Array[Case]
+
 pub fn option_u32_regression_suite() -> Array[Case]
 
 pub fn parse(Shape, String) -> Value?

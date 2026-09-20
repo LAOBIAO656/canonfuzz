@@ -105,6 +105,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.list_point_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "option-result-u32-string",
+      wit_file: "wit/option-result-u32-string.wit",
+      world: "canon-option-result-u32-string",
+      echo_pkg_dir: "gen/world/canon-option-result-u32-string",
+      echo_impl: OPTION_RESULT_U32_STRING_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/option-result-u32-string",
+      cases: @canonfuzz.option_result_u32_string_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -399,6 +409,16 @@ const LIST_POINT_ECHO_IMPL =
   #|pub fn echo_list_point(
   #|  v : Array[@canon-list-point.Point],
   #|) -> Array[@canon-list-point.Point] {
+  #|  v
+  #|}
+  #|
+
+///|
+const OPTION_RESULT_U32_STRING_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_option_result(
+  #|  v : Result[UInt, String]?,
+  #|) -> Result[UInt, String]? {
   #|  v
   #|}
   #|

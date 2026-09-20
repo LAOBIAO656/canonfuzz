@@ -605,3 +605,30 @@ test "parse recovers an empty list of records and a single-element list" {
     ),
   )
 }
+
+///|
+/// `strip` trims a *fixed-length* prefix and a one-character suffix, not
+/// a matched pair of brackets, so it never actually needed bracket
+/// matching to handle nesting: whatever text is left in the middle is
+/// handed to the inner `parse` unchanged, regardless of what parens that
+/// middle text itself contains. So `option<result<...>>` - two
+/// paren-using wrappers nested inside each other - already worked before
+/// `wit/option-result-u32-string.wit` existed to exercise it against a
+/// real component; this checks the same property `parse`-only, the way
+/// `list<record>`'s nesting was checked before its own fixture existed.
+test "parse recovers a nested option of result" {
+  let shape = ShOption(ShResult(ok=ShU32, err=ShString))
+  assert_true(
+    same_option(
+      parse(shape, "some(ok(5))"),
+      Some(VOption(Some(VResult(Ok(VU32(5)))))),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(shape, "some(err(\"oops\"))"),
+      Some(VOption(Some(VResult(Err(VString("oops")))))),
+    ),
+  )
+  assert_true(same_option(parse(shape, "none"), Some(VOption(None))))
+}
