@@ -8,6 +8,8 @@ import {
 // Values
 pub fn all_regression_suites() -> Array[Case]
 
+pub fn list_point_regression_suite() -> Array[Case]
+
 pub fn list_u32_regression_suite() -> Array[Case]
 
 pub fn option_u32_regression_suite() -> Array[Case]

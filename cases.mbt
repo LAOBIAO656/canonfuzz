@@ -349,7 +349,8 @@ pub fn all_regression_suites() -> Array[Case] {
   result_u32_string_regression_suite() +
   record_point_regression_suite() +
   list_u32_regression_suite() +
-  variant_match_result_regression_suite()
+  variant_match_result_regression_suite() +
+  list_point_regression_suite()
 }
 
 ///|
@@ -582,6 +583,51 @@ pub fn variant_match_result_regression_suite() -> Array[Case] {
       expect: VVariant(case_name="partial", payload=Some(VU32(5))),
       shape,
       note: "a case with a numeric payload, to check that different cases' payload shapes are each used correctly, not just the first case declared",
+    },
+  ]
+}
+
+///|
+/// A smaller `point` than `record_point_shape`'s - just the two required
+/// fields, no `option` field - since what this suite is checking is
+/// nesting a record inside a list, not re-checking the record work
+/// itself.
+fn nested_point_shape() -> Shape {
+  ShRecord([("x", ShS32), ("y", ShS32)])
+}
+
+///|
+fn nested_point(x : Int, y : Int) -> Value {
+  VRecord([("x", VS32(x)), ("y", VS32(y))])
+}
+
+///|
+/// The `wit/list-point.wit` regression corpus: a list of records. Neither
+/// `option`/`result`'s parsing (which still assumes no nested parens
+/// inside its own wrapper, see the doc comment on `parse` in
+/// `wave_parse.mbt`) nor anything else needed to change for this to
+/// work - a record uses `{}`, not `()`, so `split_top_level` already
+/// keeps a record's internal comma separate from the list's. This suite
+/// exists to confirm that's actually true against a real component, not
+/// just architecturally plausible.
+pub fn list_point_regression_suite() -> Array[Case] {
+  let shape = ShList(nested_point_shape())
+  [
+    {
+      name: "list-point-empty",
+      function: "echo-list-point",
+      input: VList([]),
+      expect: VList([]),
+      shape,
+      note: "the empty list, same as list-u32's, now with a record element type",
+    },
+    {
+      name: "list-point-several",
+      function: "echo-list-point",
+      input: VList([nested_point(1, 2), nested_point(-3, 4)]),
+      expect: VList([nested_point(1, 2), nested_point(-3, 4)]),
+      shape,
+      note: "two records in one list - each record's own comma and the list's separating comma must both be recognized correctly",
     },
   ]
 }

@@ -60,11 +60,13 @@ construction rather than found by random search.
   declaration order, an omitted `option` field, and a string field
   containing a comma and a colon), `wit/list-u32.wit` (the empty list, a
   single element, and a case checking that element order - not just
-  element membership - is preserved), and `wit/variant-match-result.wit`
-  (a three-case variant, one case with no payload, two with different
+  element membership - is preserved), `wit/variant-match-result.wit` (a
+  three-case variant, one case with no payload, two with different
   payload types, where the no-payload case is deliberately named `none` -
   the same word as the `option` "empty" keyword - to exercise WAVE's
-  mandatory `%` escaping for a colliding case name).
+  mandatory `%` escaping for a colliding case name), and
+  `wit/list-point.wit` (a `list<record>` - the first nested fixture; see
+  "Nesting" below for why this one needed no code changes).
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -93,15 +95,15 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Every WIT type-former now has at least one flat fixture: scalars, one
-  flags type, `option<u32>`, `result<u32, string>`, one flat `record`,
-  one flat `list`, and one flat `variant`. Only nesting is left - a
-  record inside a list, a list inside an option, an option-of-record, and
-  so on. `parse`'s option/result/variant handling in particular still
-  assumes no nested parentheses inside the wrapper's own parens (see the
-  doc comment on `parse` in `wave_parse.mbt`), which a record or list
-  wrapped in `option<...>` would violate. Extending that will be part of
-  whichever capability first needs it.
+- Every WIT type-former has at least one fixture, including one nested
+  one (`list<record>`, see "Nesting" below). Not yet covered: a record or
+  list nested inside an `option`/`result`/`variant` specifically -
+  `parse`'s handling of those three still assumes no nested parentheses
+  inside the wrapper's own parens (see the doc comment on `parse` in
+  `wave_parse.mbt`), and a record/list wrapped that way would need that
+  fixed first, unlike `list<record>`, which used `{}`/`[]` and needed
+  nothing. Extending that will be part of whichever capability first
+  needs it.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -213,6 +215,17 @@ canonfuzz: running the regression suite against the component
   pass  match-partial
 
 3 passed, 0 failed, 3 total
+
+== list-point ==
+canonfuzz: generating guest bindings for wit/list-point.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  list-point-empty
+  pass  list-point-several
+
+2 passed, 0 failed, 2 total
 ```
 
 This run passes overall: every fixture except `wide-flags` builds and every
@@ -293,11 +306,33 @@ comparing two opaque strings.
 forms `render` itself produces. Records get a proper depth- and
 quote-aware splitter (`split_top_level` in `wave_parse.mbt`) precisely
 because a record field's value can itself contain a comma or a colon -
-but `option`/`result` still assume their wrapper's parens contain no
-further nested parens, so a record wrapped in `option<...>` isn't
-handled yet. Extending that will be part of adding whatever capability
-first needs it (a `list` of records, say), not a separate capability on
-its own.
+`option`/`result`/`variant` still assume their wrapper's parens contain
+no further nested parens, so wrapping *one of those three* inside
+another isn't handled yet (see "Nesting" below for why that limit turned
+out narrower than it first looked).
+
+## Nesting
+
+`list<record>` (`wit/list-point.wit`) needed no changes to `parse` or
+`render` at all - it already worked the moment `list<T>` and `record`
+each existed on their own. That's not an accident: a record uses
+`{}` and a list uses `[]`, and `split_top_level` already tracks bracket
+depth generically across all three bracket kinds, so a list of records
+was never actually blocked by the limitation described above - only
+nesting `option`/`result`/`variant` inside *each other* is, since all
+three share `()`. `canonfuzz_wbtest.mbt` checks the list-of-records case
+directly (including the empty case and getting each record's internal
+comma right without swallowing the list's separating comma), confirming
+this was already true rather than assuming it from the bracket
+characters alone.
+
+So the actual remaining gap is narrower than "nesting" as a whole: only
+a same-bracket-family combination - `option<result<...>>`,
+`result<option<...>>`, a variant case whose payload is itself a variant,
+and so on - needs `parse`'s option/result/variant handling generalized
+to find a *matching* closing paren instead of just the last one in the
+text, the same way `split_top_level` already finds matching brackets for
+records and lists.
 
 ## Supported environments
 

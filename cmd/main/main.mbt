@@ -95,6 +95,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.variant_match_result_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "list-point",
+      wit_file: "wit/list-point.wit",
+      world: "canon-list-point",
+      echo_pkg_dir: "gen/world/canon-list-point",
+      echo_impl: LIST_POINT_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/list-point",
+      cases: @canonfuzz.list_point_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -379,6 +389,16 @@ const VARIANT_MATCH_RESULT_ECHO_IMPL =
   #|pub fn echo_match_result(
   #|  v : @canon-variant-match-result.MatchResult,
   #|) -> @canon-variant-match-result.MatchResult {
+  #|  v
+  #|}
+  #|
+
+///|
+const LIST_POINT_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_list_point(
+  #|  v : Array[@canon-list-point.Point],
+  #|) -> Array[@canon-list-point.Point] {
   #|  v
   #|}
   #|

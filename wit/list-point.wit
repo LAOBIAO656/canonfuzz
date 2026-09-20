@@ -1,0 +1,9 @@
+package canonfuzz:list-point@0.1.0;
+
+world canon-list-point {
+    record point {
+        x: s32,
+        y: s32,
+    }
+    export echo-list-point: func(v: list<point>) -> list<point>;
+}

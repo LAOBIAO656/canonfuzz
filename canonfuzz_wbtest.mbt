@@ -566,3 +566,42 @@ test "parse rejects a variant case name the shape does not declare" {
 test "parse rejects the unescaped keyword form of a colliding case name" {
   assert_true(parse(match_result_shape(), "none") is None)
 }
+
+// -- nesting -------------------------------------------------------------
+//
+// option/result/variant's parsing still assumes no nested parentheses
+// inside their own wrapper parens (see the doc comment on `parse` in
+// wave_parse.mbt), but record and list use `{}`/`[]`, not `()`, so
+// nesting *them* - a list of records, in particular - needs no change to
+// that code at all. These tests exist to confirm that's actually true,
+// not just architecturally plausible.
+//
+// nested_point_shape() is defined in cases.mbt and reused here, since
+// it's the same shape wit/list-point.wit's real cases use.
+
+///|
+test "parse recovers a list of records" {
+  let shape = ShList(nested_point_shape())
+  let expected = VList([
+    VRecord([("x", VS32(1)), ("y", VS32(2))]),
+    VRecord([("x", VS32(-3)), ("y", VS32(4))]),
+  ])
+  assert_true(
+    same_option(parse(shape, "[{x: 1, y: 2}, {x: -3, y: 4}]"), Some(expected)),
+  )
+}
+
+///|
+/// The comma inside each record and the comma separating list elements
+/// must both be handled correctly at once - split_top_level's depth
+/// tracking is what keeps them apart.
+test "parse recovers an empty list of records and a single-element list" {
+  let shape = ShList(nested_point_shape())
+  assert_true(same_option(parse(shape, "[]"), Some(VList([]))))
+  assert_true(
+    same_option(
+      parse(shape, "[{x: 1, y: 2}]"),
+      Some(VList([VRecord([("x", VS32(1)), ("y", VS32(2))])])),
+    ),
+  )
+}
