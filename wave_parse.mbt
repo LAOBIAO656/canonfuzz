@@ -57,7 +57,29 @@ pub fn parse(shape : Shape, text : String) -> Value? {
     ShOption(inner) => parse_wave_option(text, inner)
     ShResult(ok~, err~) => parse_wave_result(text, ok~, err~)
     ShRecord(field_shapes) => parse_wave_record(text, field_shapes)
+    ShList(element) => parse_wave_list(text, element)
   }
+}
+
+///|
+/// Every element must parse against the same `element` shape - a `list`
+/// is homogeneous, unlike a record's fields - and an empty list is `[]`
+/// with nothing between the brackets, not one empty element.
+fn parse_wave_list(text : String, element : Shape) -> Value? {
+  strip(text, "[", "]").bind(fn(body) {
+    if body == "" {
+      return Some(VList([]))
+    }
+    let elements = []
+    for entry_text in split_top_level(body, ',') {
+      let entry_text = entry_text.trim(chars=" ").to_owned()
+      match parse(element, entry_text) {
+        None => return None
+        Some(value) => elements.push(value)
+      }
+    }
+    Some(VList(elements))
+  })
 }
 
 ///|

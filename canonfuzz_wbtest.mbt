@@ -417,3 +417,55 @@ test "parse rejects an unknown record field" {
 test "parse rejects a record missing a non-optional field" {
   assert_true(parse(point_shape(), "{x: 1}") is None)
 }
+
+// -- lists -----------------------------------------------------------
+
+///|
+test "render renders lists, including the empty list" {
+  assert_eq(render(VList([])), "[]")
+  assert_eq(render(VList([VU32(1), VU32(2), VU32(3)])), "[1, 2, 3]")
+}
+
+///|
+/// `same` for lists compares position by position and cares about
+/// length and order - unlike a record's fields, WAVE gives no basis for
+/// treating two lists with the same elements in a different order as
+/// equal.
+test "same compares lists by position, not just by contents" {
+  assert_true(same(VList([VU32(1), VU32(2)]), VList([VU32(1), VU32(2)])))
+  assert_false(same(VList([VU32(1), VU32(2)]), VList([VU32(2), VU32(1)])))
+  assert_false(same(VList([VU32(1)]), VList([VU32(1), VU32(1)])))
+}
+
+///|
+test "parse recovers lists, including the empty list" {
+  assert_true(same_option(parse(ShList(ShU32), "[]"), Some(VList([]))))
+  assert_true(
+    same_option(
+      parse(ShList(ShU32), "[1, 2, 3]"),
+      Some(VList([VU32(1), VU32(2), VU32(3)])),
+    ),
+  )
+}
+
+///|
+/// Every element must parse against the list's element shape - a
+/// component that (correctly or not) returned an out-of-range element is
+/// malformed input, not a value to accept and then mismatch on
+/// elsewhere.
+test "parse rejects a list with an out-of-range element" {
+  assert_true(parse(ShList(ShU8), "[1, 256]") is None)
+}
+
+///|
+/// A list element can itself contain a comma inside a nested string -
+/// the same `split_top_level` property already checked for records,
+/// checked again here since lists use it independently.
+test "parse handles a comma inside a nested string element" {
+  assert_true(
+    same_option(
+      parse(ShList(ShString), "[\"a, b\", \"c\"]"),
+      Some(VList([VString("a, b"), VString("c")])),
+    ),
+  )
+}

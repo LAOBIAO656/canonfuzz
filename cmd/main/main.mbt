@@ -75,6 +75,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.record_point_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "list-u32",
+      wit_file: "wit/list-u32.wit",
+      world: "canon-list-u32",
+      echo_pkg_dir: "gen/world/canon-list-u32",
+      echo_impl: LIST_U32_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/list-u32",
+      cases: @canonfuzz.list_u32_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -345,6 +355,12 @@ const RECORD_POINT_ECHO_IMPL =
   #|) -> @canon-record-point.Point {
   #|  v
   #|}
+  #|
+
+///|
+const LIST_U32_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_list_u32(v : FixedArray[UInt]) -> FixedArray[UInt] { v }
   #|
 
 ///|

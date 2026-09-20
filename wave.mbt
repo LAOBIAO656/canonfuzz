@@ -40,7 +40,22 @@ pub fn render(v : Value) -> String {
     VResult(Ok(inner)) => "ok(" + render(inner) + ")"
     VResult(Err(inner)) => "err(" + render(inner) + ")"
     VRecord(fields) => render_record(fields)
+    VList(elements) => render_list(elements)
   }
+}
+
+///|
+fn render_list(elements : Array[Value]) -> String {
+  let mut out = "["
+  let mut first = true
+  for element in elements {
+    if !first {
+      out = out + ", "
+    }
+    out = out + render(element)
+    first = false
+  }
+  out + "]"
 }
 
 ///|

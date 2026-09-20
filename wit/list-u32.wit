@@ -1,0 +1,5 @@
+package canonfuzz:list-u32@0.1.0;
+
+world canon-list-u32 {
+    export echo-list-u32: func(v: list<u32>) -> list<u32>;
+}

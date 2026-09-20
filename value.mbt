@@ -42,6 +42,7 @@ pub enum Value {
   VOption(Value?)
   VResult(Result[Value, Value])
   VRecord(Array[(String, Value)])
+  VList(Array[Value])
 } derive(Debug)
 
 ///|
@@ -72,8 +73,25 @@ pub fn same(a : Value, b : Value) -> Bool {
     (VResult(Ok(x)), VResult(Ok(y))) => same(x, y)
     (VResult(Err(x)), VResult(Err(y))) => same(x, y)
     (VRecord(fx), VRecord(fy)) => same_fields(fx, fy)
+    (VList(xs), VList(ys)) => same_elements(xs, ys)
     (_, _) => false
   }
+}
+
+///|
+/// Unlike a record's fields, a list's elements are ordered - WAVE gives
+/// no basis for treating `[1, 2]` and `[2, 1]` as the same value - so
+/// this compares position by position instead of by lookup.
+fn same_elements(a : Array[Value], b : Array[Value]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for i = 0; i < a.length(); i = i + 1 {
+    if !same(a[i], b[i]) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -149,4 +167,5 @@ pub enum Shape {
   ShOption(Shape)
   ShResult(ok~ : Shape, err~ : Shape)
   ShRecord(Array[(String, Shape)])
+  ShList(Shape)
 } derive(Debug)

@@ -56,7 +56,9 @@ construction rather than found by random search.
   `wit/record-point.wit` (a `record` with two `s32` fields and an
   `option<string>` field, with cases covering fields given out of
   declaration order, an omitted `option` field, and a string field
-  containing a comma and a colon).
+  containing a comma and a colon), and `wit/list-u32.wit` (the empty
+  list, a single element, and a case checking that element order - not
+  just element membership - is preserved).
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -85,14 +87,14 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Scalars, one flags type, `option<u32>`, `result<u32, string>`, and one
-  flat `record`. Lists, variants, enums, and records nested inside another
-  record, a list, or an `option`/`result` are not covered - `parse`'s
-  option/result handling assumes no nested parentheses inside the
-  wrapper's own parens (see the doc comment on `parse` in
-  `wave_parse.mbt`), which a record wrapped in `option<...>` would
-  violate. Extending that will be part of whichever capability first
-  needs it.
+- Scalars, one flags type, `option<u32>`, `result<u32, string>`, one flat
+  `record`, and one flat `list`. Variants, enums, and anything nested -
+  a record inside a list, a list inside an option, an option-of-record -
+  are not covered. `parse`'s option/result handling in particular still
+  assumes no nested parentheses inside the wrapper's own parens (see the
+  doc comment on `parse` in `wave_parse.mbt`), which a record or list
+  wrapped in `option<...>` would violate. Extending that will be part of
+  whichever capability first needs it.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -180,6 +182,18 @@ canonfuzz: running the regression suite against the component
   pass  record-label-with-punctuation
 
 4 passed, 0 failed, 4 total
+
+== list-u32 ==
+canonfuzz: generating guest bindings for wit/list-u32.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  list-empty
+  pass  list-single
+  pass  list-several
+
+3 passed, 0 failed, 3 total
 ```
 
 This run passes overall: every fixture except `wide-flags` builds and every

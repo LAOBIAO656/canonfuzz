@@ -347,7 +347,8 @@ pub fn all_regression_suites() -> Array[Case] {
   wide_flags_regression_suite() +
   option_u32_regression_suite() +
   result_u32_string_regression_suite() +
-  record_point_regression_suite()
+  record_point_regression_suite() +
+  list_u32_regression_suite()
 }
 
 ///|
@@ -498,6 +499,42 @@ pub fn record_point_regression_suite() -> Array[Case] {
       expect: point(0, 0, VOption(Some(VString("a, b: c \"q\"")))),
       shape,
       note: "a comma and a colon inside the nested string field - exactly what split_top_level in wave_parse.mbt exists to not misread as extra fields",
+    },
+  ]
+}
+
+///|
+/// The `wit/list-u32.wit` regression corpus: the empty list matters on
+/// its own (distinct from, say, a list containing one zero element), and
+/// `list-single`/`list-several` check that element order is preserved,
+/// not just that the right elements are present - `same` for lists
+/// compares position by position for exactly this reason.
+pub fn list_u32_regression_suite() -> Array[Case] {
+  let shape = ShList(ShU32)
+  [
+    {
+      name: "list-empty",
+      function: "echo-list-u32",
+      input: VList([]),
+      expect: VList([]),
+      shape,
+      note: "the empty list",
+    },
+    {
+      name: "list-single",
+      function: "echo-list-u32",
+      input: VList([VU32(4294967295)]),
+      expect: VList([VU32(4294967295)]),
+      shape,
+      note: "one element, at the payload type's upper bound",
+    },
+    {
+      name: "list-several",
+      function: "echo-list-u32",
+      input: VList([VU32(0), VU32(1), VU32(2)]),
+      expect: VList([VU32(0), VU32(1), VU32(2)]),
+      shape,
+      note: "element order must be preserved, not just element membership",
     },
   ]
 }

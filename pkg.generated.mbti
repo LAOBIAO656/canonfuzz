@@ -8,6 +8,8 @@ import {
 // Values
 pub fn all_regression_suites() -> Array[Case]
 
+pub fn list_u32_regression_suite() -> Array[Case]
+
 pub fn option_u32_regression_suite() -> Array[Case]
 
 pub fn parse(Shape, String) -> Value?
@@ -58,6 +60,7 @@ pub enum Shape {
   ShOption(Shape)
   ShResult(ok~ : Shape, err~ : Shape)
   ShRecord(Array[(String, Shape)])
+  ShList(Shape)
 } derive(@debug.Debug)
 
 pub enum Value {
@@ -78,6 +81,7 @@ pub enum Value {
   VOption(Value?)
   VResult(Result[Value, Value])
   VRecord(Array[(String, Value)])
+  VList(Array[Value])
 } derive(@debug.Debug)
 
 // Type aliases
