@@ -181,32 +181,84 @@ enum Outcome {
 }
 
 ///|
-async fn main {
-  let mut any_unexpected_failure = false
-  for fixture in fixtures() {
-    let ok = run_fixture(fixture)
-    if !ok {
-      any_unexpected_failure = true
-    }
+/// What happened to one fixture, structured rather than just printed -
+/// this is what `--json` serializes, and what decides the process exit
+/// status, so both read the same facts instead of the exit code and the
+/// JSON report ever being able to silently disagree.
+struct FixtureReport {
+  name : String
+  outcome : FixtureOutcome
+}
+
+///|
+struct CaseRun {
+  cases : Array[(String, Outcome)]
+  passed : Int
+  failed : Int
+}
+
+///|
+enum FixtureOutcome {
+  CodegenFailed(String)
+  BuildFailed(String)
+  ComponentizeFailed(String)
+  /// A known build failure reproduced as tracked - not a problem.
+  Xfail(String)
+  /// A known build failure did *not* reproduce - the build succeeded, so
+  /// its cases were run for real; see `run_fixture`.
+  Xpass(CaseRun)
+  Ran(CaseRun)
+}
+
+///|
+/// Whether a fixture's outcome is one `cmd/main` should exit non-zero
+/// for. `Xfail` alone is not a failure - that is the entire point of
+/// tracking it - but an `Xpass` still needs every case to have actually
+/// passed.
+fn fixture_ok(outcome : FixtureOutcome) -> Bool {
+  match outcome {
+    CodegenFailed(_) => false
+    BuildFailed(_) => false
+    ComponentizeFailed(_) => false
+    Xfail(_) => true
+    Xpass(run) => run.failed == 0
+    Ran(run) => run.failed == 0
   }
-  if any_unexpected_failure {
+}
+
+///|
+async fn main {
+  // `moon run cmd/main -- --json` (the `--` is moon's own separator);
+  // JSON mode suppresses the running commentary so stdout is nothing but
+  // the final report, and machine-readable exit status is the same
+  // fixture_ok() check either way - the report and the exit code can
+  // never disagree about what happened.
+  let quiet = @env.args().contains("--json")
+  let reports = []
+  for fixture in fixtures() {
+    reports.push(run_fixture(fixture, quiet~))
+  }
+  if quiet {
+    println(report_to_json(reports).stringify(indent=2))
+  }
+  if reports.iter().any(fn(r) { !fixture_ok(r.outcome) }) {
     @abort.abort("canonfuzz: at least one fixture had an unexpected failure")
   }
 }
 
 ///|
-/// Run one fixture end to end. Returns `true` if the fixture's outcome
-/// matched what was expected of it (all cases passed, or a known build
-/// failure reproduced as tracked - XFAIL), `false` if something needs
-/// attention (an unexpected failure anywhere, or a build failure that
-/// does not match the tracked fingerprint - FAIL).
-///
-/// A fixture whose build is expected to fail and does not fail is not by
-/// itself treated as an error (XPASS): its cases are run for real
-/// instead, since the underlying defect may have just been fixed
-/// upstream, and only a real case failure at that point fails the run.
-async fn run_fixture(f : Fixture) -> Bool {
-  println("\n== " + f.name + " ==")
+/// Run one fixture end to end and return what happened. `quiet` silences
+/// the running commentary this always printed before `--json` existed
+/// (see `main`); it never changes what is decided, only whether it is
+/// also narrated as it happens.
+async fn run_fixture(f : Fixture, quiet~ : Bool) -> FixtureReport {
+  fn say(s : String) -> Unit {
+    if !quiet {
+      println(s)
+    }
+  }
+
+  say("\n== " + f.name + " ==")
   if @fs.exists(f.work_dir) {
     // Remove any output left by a previous run (a different wit-bindgen
     // version, an edited fixture, ...) before regenerating, so stale
@@ -215,82 +267,111 @@ async fn run_fixture(f : Fixture) -> Bool {
     @fs.rmdir(f.work_dir, recursive=true)
   }
   @fs.mkdir(f.work_dir, recursive=true)
-  println("canonfuzz: generating guest bindings for " + f.wit_file)
-  match run_wit_bindgen(f) {
+  say("canonfuzz: generating guest bindings for " + f.wit_file)
+  let outcome = match run_wit_bindgen(f) {
     Some(reason) => {
-      report_early_failure("codegen", reason)
-      false
+      report_early_failure("codegen", reason, quiet~)
+      CodegenFailed(reason)
     }
     None => {
       write_echo_impl(f)
-      println("canonfuzz: building the guest component with moon")
+      say("canonfuzz: building the guest component with moon")
       match (build_guest(f), f.known_build_failure) {
         (Some(actual), Some(known)) =>
           if fingerprint_matches(actual, known) {
-            println(
+            say(
               "canonfuzz: " +
               f.name +
               " build failed as expected (XFAIL, tracked, not a new problem)",
             )
-            println("  tracked cause: " + known.reason)
-            true
+            say("  tracked cause: " + known.reason)
+            Xfail(known.reason)
           } else {
-            println(
+            say(
               "canonfuzz: " +
               f.name +
               " build failed, but NOT for the tracked reason (FAIL)",
             )
-            println("  tracked cause was: " + known.reason)
-            report_early_failure("build", actual)
-            false
+            say("  tracked cause was: " + known.reason)
+            report_early_failure("build", actual, quiet~)
+            BuildFailed(actual)
           }
         (Some(reason), None) => {
-          report_early_failure("build", reason)
-          false
+          report_early_failure("build", reason, quiet~)
+          BuildFailed(reason)
         }
         (None, Some(known)) => {
-          println(
-            "canonfuzz: " + f.name + " build UNEXPECTEDLY SUCCEEDED (XPASS)",
-          )
-          println("  previously tracked as a known failure: " + known.reason)
-          println(
+          say("canonfuzz: " + f.name + " build UNEXPECTEDLY SUCCEEDED (XPASS)")
+          say("  previously tracked as a known failure: " + known.reason)
+          say(
             "  ALERT: update this fixture's known_build_failure in fixtures() - running its cases for real now",
           )
-          run_componentize_and_cases(f)
+          match run_componentize_and_cases(f, quiet~) {
+            ComponentizeFailed(reason) => ComponentizeFailed(reason)
+            CasesRan(run) => Xpass(run)
+          }
         }
-        (None, None) => run_componentize_and_cases(f)
+        (None, None) =>
+          match run_componentize_and_cases(f, quiet~) {
+            ComponentizeFailed(reason) => ComponentizeFailed(reason)
+            CasesRan(run) => Ran(run)
+          }
       }
     }
   }
+  { name: f.name, outcome, }
 }
 
 ///|
-async fn run_componentize_and_cases(f : Fixture) -> Bool {
-  println("canonfuzz: turning the core module into a component with wasm-tools")
+/// The two things that can come out of turning a built core module into
+/// a running, tested component: either `wasm-tools` itself failed (a
+/// distinct outcome, not zero cases run and zero cases failed - the
+/// difference between "nothing to report" and "something is wrong" would
+/// otherwise be lost, and `fixture_ok` would wrongly treat an empty
+/// `CaseRun` as a pass), or it succeeded and every case actually ran.
+enum ComponentizeResult {
+  ComponentizeFailed(String)
+  CasesRan(CaseRun)
+}
+
+///|
+async fn run_componentize_and_cases(
+  f : Fixture,
+  quiet~ : Bool,
+) -> ComponentizeResult {
+  fn say(s : String) -> Unit {
+    if !quiet {
+      println(s)
+    }
+  }
+
+  say("canonfuzz: turning the core module into a component with wasm-tools")
   match componentize(f) {
     Some(reason) => {
-      report_early_failure("componentize", reason)
-      false
+      report_early_failure("componentize", reason, quiet~)
+      ComponentizeFailed(reason)
     }
     None => {
-      println("canonfuzz: running the regression suite against the component\n")
+      say("canonfuzz: running the regression suite against the component\n")
       let mut passed = 0
       let mut failed = 0
+      let cases = []
       for case in f.cases {
         let outcome = run_case(f, case)
+        cases.push((case.name, outcome))
         match outcome {
           Pass => {
             passed = passed + 1
-            println("  pass  " + case.name)
+            say("  pass  " + case.name)
           }
           _ => {
             failed = failed + 1
-            println("  FAIL  " + case.name + "  (" + case.note + ")")
-            println("        " + describe(outcome))
+            say("  FAIL  " + case.name + "  (" + case.note + ")")
+            say("        " + describe(outcome))
           }
         }
       }
-      println(
+      say(
         "\n" +
         passed.to_string() +
         " passed, " +
@@ -299,7 +380,7 @@ async fn run_componentize_and_cases(f : Fixture) -> Bool {
         f.cases.length().to_string() +
         " total",
       )
-      failed == 0
+      CasesRan({ cases, passed, failed, })
     }
   }
 }
@@ -566,7 +647,96 @@ fn describe(outcome : Outcome) -> String {
 }
 
 ///|
-fn report_early_failure(stage : String, reason : String) -> Unit {
-  println("canonfuzz: " + stage + " failed, no cases were run\n")
-  println(reason)
+fn report_early_failure(stage : String, reason : String, quiet~ : Bool) -> Unit {
+  if !quiet {
+    println("canonfuzz: " + stage + " failed, no cases were run\n")
+    println(reason)
+  }
+}
+
+///|
+/// The `--json` report: one object per fixture, each carrying enough to
+/// reconstruct exactly what the human-readable commentary would have
+/// said, plus the same `ok` a caller would get from the process exit
+/// code - both computed from the same `FixtureOutcome`, so a consumer
+/// parsing this never needs to also inspect the exit code to know what
+/// happened.
+fn report_to_json(reports : Array[FixtureReport]) -> Json {
+  let ok = reports.iter().all(fn(r) { fixture_ok(r.outcome) })
+  Json::object(
+    Map::from_array([
+      ("ok", Json::boolean(ok)),
+      ("fixtures", Json::array(reports.map(fn(r) { fixture_to_json(r) }))),
+    ]),
+  )
+}
+
+///|
+fn fixture_to_json(r : FixtureReport) -> Json {
+  let fields : Array[(String, Json)] = [("name", Json::string(r.name))]
+  let fields = match r.outcome {
+    CodegenFailed(reason) =>
+      fields +
+      [
+        ("status", Json::string("codegen-failed")),
+        ("reason", Json::string(reason)),
+      ]
+    BuildFailed(reason) =>
+      fields +
+      [
+        ("status", Json::string("build-failed")),
+        ("reason", Json::string(reason)),
+      ]
+    ComponentizeFailed(reason) =>
+      fields +
+      [
+        ("status", Json::string("componentize-failed")),
+        ("reason", Json::string(reason)),
+      ]
+    Xfail(reason) =>
+      fields +
+      [("status", Json::string("xfail")), ("reason", Json::string(reason))]
+    Xpass(run) =>
+      fields + [("status", Json::string("xpass"))] + case_run_to_json(run)
+    Ran(run) =>
+      fields + [("status", Json::string("pass"))] + case_run_to_json(run)
+  }
+  Json::object(Map::from_array(fields))
+}
+
+///|
+fn case_run_to_json(run : CaseRun) -> Array[(String, Json)] {
+  [
+    ("passed", Json::number(run.passed.to_double())),
+    ("failed", Json::number(run.failed.to_double())),
+    (
+      "cases",
+      Json::array(run.cases.map(fn(entry) { case_to_json(entry.0, entry.1) })),
+    ),
+  ]
+}
+
+///|
+fn case_to_json(name : String, outcome : Outcome) -> Json {
+  let base : Array[(String, Json)] = [("name", Json::string(name))]
+  let fields = match outcome {
+    Pass => base + [("outcome", Json::string("pass"))]
+    Trapped(detail) =>
+      base +
+      [("outcome", Json::string("trapped")), ("detail", Json::string(detail))]
+    Unparseable(detail) =>
+      base +
+      [
+        ("outcome", Json::string("unparseable")),
+        ("detail", Json::string(detail)),
+      ]
+    Mismatch(actual~, expected~) =>
+      base +
+      [
+        ("outcome", Json::string("mismatch")),
+        ("expected", Json::string(@canonfuzz.render(expected))),
+        ("actual", Json::string(@canonfuzz.render(actual))),
+      ]
+  }
+  Json::object(Map::from_array(fields))
 }

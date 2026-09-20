@@ -4,8 +4,8 @@
 /// pair that can never agree, which would make the whole suite useless
 /// regardless of what a component returns.
 test "regression suite entries are internally consistent" {
-  for case in all_regression_suites() {
-    assert_true(same(case.input, case.expect))
+  for case in @canonfuzz.all_regression_suites() {
+    assert_true(@canonfuzz.same(case.input, case.expect))
   }
 }
 
@@ -16,7 +16,7 @@ test "regression suite entries are internally consistent" {
 /// the clash is within one suite or between two of them.
 test "regression suite case names are unique" {
   let seen : Map[String, Bool] = Map([])
-  for case in all_regression_suites() {
+  for case in @canonfuzz.all_regression_suites() {
     assert_false(seen.contains(case.name))
     seen[case.name] = true
   }
@@ -28,9 +28,9 @@ test "regression suite case names are unique" {
 /// would render bit positions that don't match the fixture it is meant to
 /// test.
 test "wide flags cases all use the declared label list" {
-  let labels = wide_flags_labels()
+  let labels = @canonfuzz.wide_flags_labels()
   assert_eq(labels.length(), 36)
-  for case in wide_flags_regression_suite() {
+  for case in @canonfuzz.wide_flags_regression_suite() {
     match case.input {
       VFlags(labels=case_labels, ..) => assert_eq(case_labels, labels)
       _ => fail("case " + case.name + " is not a VFlags value")
@@ -48,11 +48,11 @@ test "wide flags cases all use the declared label list" {
 /// every real component run would misreport a correct answer as a
 /// mismatch regardless of what `wasmtime` actually returned.
 test "parsing a case's own rendering recovers the expected value" {
-  for case in all_regression_suites() {
-    let text = render(case.expect)
-    match parse(case.shape, text) {
+  for case in @canonfuzz.all_regression_suites() {
+    let text = @canonfuzz.render(case.expect)
+    match @canonfuzz.parse(case.shape, text) {
       Some(recovered) =>
-        if !same(recovered, case.expect) {
+        if !@canonfuzz.same(recovered, case.expect) {
           fail(
             "case " +
             case.name +

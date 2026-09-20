@@ -90,6 +90,8 @@ construction rather than found by random search.
   not just created if missing, so a `.mbt` file left over from a previous
   `wit-bindgen` version or a since-edited `.wit` file can never linger
   alongside freshly generated ones and change what actually gets built.
+- `moon run cmd/main -- --json` prints a machine-readable report instead
+  of the running commentary - see "Machine-readable output" below.
 
 The core (`value.mbt`, `wave.mbt`, `cases.mbt`) has no external
 dependency and builds on every MoonBit target. `cmd/main` requires
@@ -115,8 +117,6 @@ has only run on Linux and macOS - see "Supported environments" below.
   capability.
 - No differential mode against a second `wit-bindgen` backend (e.g. Rust)
   yet, even though #1587 was itself found by exactly that comparison.
-- `cmd/main`'s exit code and console report are the only output format;
-  machine-readable (JSON) reporting is future work.
 
 ## Running it
 
@@ -384,6 +384,53 @@ special-cases depth or type-former identity, so the same reasoning says
 these should also already work - but that is exactly the kind of claim
 this project exists to check by building the fixture, not to assert from
 how the code reads.
+
+## Machine-readable output
+
+`moon run cmd/main --target native -- --json` (the first `--` is
+`moon`'s own separator between its flags and the program's) prints one
+JSON object instead of the running commentary:
+
+```json
+{
+  "ok": true,
+  "fixtures": [
+    {
+      "name": "scalars",
+      "status": "pass",
+      "passed": 24,
+      "failed": 0,
+      "cases": [
+        { "name": "bool-true", "outcome": "pass" },
+        ...
+      ]
+    },
+    {
+      "name": "wide-flags",
+      "status": "xfail",
+      "reason": "wit-bindgen-cli generates an extra closing parenthesis ..."
+    }
+  ]
+}
+```
+
+`status` is one of `pass`, `xfail`, `xpass`, `codegen-failed`,
+`build-failed`, or `componentize-failed`; a case's `outcome` is one of
+`pass`, `trapped`, `unparseable`, or `mismatch` (the latter two also
+carrying `detail`, or `expected`/`actual` rendered as WAVE text, the
+same as the console report shows). The top-level `ok` and the process
+exit code are computed from the same `fixture_ok` check applied to the
+same data, so a consumer parsing this JSON never needs to separately
+trust the exit code to know what happened - they agree by construction,
+not by convention.
+
+`--json` only silences the per-fixture progress lines; it doesn't change
+what's decided, which is why fixing a real bug during this change - a
+`wasm-tools componentize` failure was, before this fix, being reported
+as an empty case run (0 passed, 0 failed), which `fixture_ok` read as a
+pass - was correctness-critical rather than incidental to adding a new
+output format. It's now its own outcome (`componentize-failed`) in both
+the JSON and the exit code.
 
 ## Supported environments
 
