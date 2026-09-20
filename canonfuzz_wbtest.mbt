@@ -632,3 +632,42 @@ test "parse recovers a nested option of result" {
   )
   assert_true(same_option(parse(shape, "none"), Some(VOption(None))))
 }
+
+///|
+/// A record field's value can itself be a `variant` - the other
+/// documented gap in "what's not implemented" alongside deeper nesting.
+/// `parse_wave_record` calls `parse(field_shape, value_text)` for every
+/// field generically, with no type-specific handling, so there is no
+/// reason this shouldn't already work; this confirms it does, including
+/// the no-payload case (whose value is just a bare word, no parens at
+/// all, right next to the field's own `:` and the following `,`).
+test "parse recovers a record field whose value is a variant" {
+  let field_shape = ShVariant([
+    ("circle", Some(ShF64)),
+    ("square", Some(ShF64)),
+    ("unknown", None),
+  ])
+  let shape = ShRecord([("id", ShU32), ("kind", field_shape)])
+  assert_true(
+    same_option(
+      parse(shape, "{id: 1, kind: circle(3.5)}"),
+      Some(
+        VRecord([
+          ("id", VU32(1)),
+          ("kind", VVariant(case_name="circle", payload=Some(VF64(3.5)))),
+        ]),
+      ),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(shape, "{id: 2, kind: unknown}"),
+      Some(
+        VRecord([
+          ("id", VU32(2)),
+          ("kind", VVariant(case_name="unknown", payload=None)),
+        ]),
+      ),
+    ),
+  )
+}

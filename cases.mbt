@@ -351,7 +351,8 @@ pub fn all_regression_suites() -> Array[Case] {
   list_u32_regression_suite() +
   variant_match_result_regression_suite() +
   list_point_regression_suite() +
-  option_result_u32_string_regression_suite()
+  option_result_u32_string_regression_suite() +
+  record_shape_info_regression_suite()
 }
 
 ///|
@@ -677,6 +678,57 @@ pub fn option_result_u32_string_regression_suite() -> Array[Case] {
       expect: VOption(Some(VResult(Err(VString("not found"))))),
       shape,
       note: "present, err arm - three levels of wrapper (option, result, string) all at once",
+    },
+  ]
+}
+
+///|
+fn shape_kind_shape() -> Shape {
+  ShVariant([
+    ("circle", Some(ShF64)),
+    ("square", Some(ShF64)),
+    ("unknown", None),
+  ])
+}
+
+///|
+fn shape_info(id : UInt, kind : Value) -> Value {
+  VRecord([("id", VU32(id)), ("kind", kind)])
+}
+
+///|
+/// The `wit/record-shape-info.wit` regression corpus: a `record` field
+/// whose value is itself a `variant` - the other documented gap in
+/// "what's not implemented" alongside deeper nesting. `parse_wave_record`
+/// already calls `parse` generically on each field's own shape, so this
+/// was expected to work unchanged; this suite confirms it does against a
+/// real component, covering both a with-payload case and the no-payload
+/// case (whose field value is a bare word, immediately followed by the
+/// closing `}` with no parens at all).
+pub fn record_shape_info_regression_suite() -> Array[Case] {
+  let shape = ShRecord([("id", ShU32), ("kind", shape_kind_shape())])
+  [
+    {
+      name: "shape-info-circle",
+      function: "echo-shape-info",
+      input: shape_info(
+        1,
+        VVariant(case_name="circle", payload=Some(VF64(3.5))),
+      ),
+      expect: shape_info(
+        1,
+        VVariant(case_name="circle", payload=Some(VF64(3.5))),
+      ),
+      shape,
+      note: "a with-payload variant case as a record field's value",
+    },
+    {
+      name: "shape-info-unknown",
+      function: "echo-shape-info",
+      input: shape_info(2, VVariant(case_name="unknown", payload=None)),
+      expect: shape_info(2, VVariant(case_name="unknown", payload=None)),
+      shape,
+      note: "a no-payload variant case as a record field's value - the field's text is a bare word right next to the record's own : and }",
     },
   ]
 }

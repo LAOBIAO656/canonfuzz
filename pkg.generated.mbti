@@ -20,6 +20,8 @@ pub fn parse(Shape, String) -> Value?
 
 pub fn record_point_regression_suite() -> Array[Case]
 
+pub fn record_shape_info_regression_suite() -> Array[Case]
+
 pub fn render(Value) -> String
 
 pub fn result_u32_string_regression_suite() -> Array[Case]

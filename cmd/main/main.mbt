@@ -115,6 +115,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.option_result_u32_string_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "record-shape-info",
+      wit_file: "wit/record-shape-info.wit",
+      world: "canon-record-shape-info",
+      echo_pkg_dir: "gen/world/canon-record-shape-info",
+      echo_impl: RECORD_SHAPE_INFO_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/record-shape-info",
+      cases: @canonfuzz.record_shape_info_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -419,6 +429,16 @@ const OPTION_RESULT_U32_STRING_ECHO_IMPL =
   #|pub fn echo_option_result(
   #|  v : Result[UInt, String]?,
   #|) -> Result[UInt, String]? {
+  #|  v
+  #|}
+  #|
+
+///|
+const RECORD_SHAPE_INFO_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_shape_info(
+  #|  v : @canon-record-shape-info.ShapeInfo,
+  #|) -> @canon-record-shape-info.ShapeInfo {
   #|  v
   #|}
   #|

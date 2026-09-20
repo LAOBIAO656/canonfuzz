@@ -1,0 +1,14 @@
+package canonfuzz:record-shape-info@0.1.0;
+
+world canon-record-shape-info {
+    variant shape-kind {
+        circle(f64),
+        square(f64),
+        unknown,
+    }
+    record shape-info {
+        id: u32,
+        kind: shape-kind,
+    }
+    export echo-shape-info: func(v: shape-info) -> shape-info;
+}

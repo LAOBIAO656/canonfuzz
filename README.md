@@ -65,10 +65,12 @@ construction rather than found by random search.
   payload types, where the no-payload case is deliberately named `none` -
   the same word as the `option` "empty" keyword - to exercise WAVE's
   mandatory `%` escaping for a colliding case name), and
-  `wit/list-point.wit` (a `list<record>`) and
-  `wit/option-result-u32-string.wit` (`option<result<u32, string>>`, two
-  paren-using wrappers nested inside each other) - see "Nesting" below
-  for why neither needed any code changes.
+  `wit/list-point.wit` (a `list<record>`), `wit/option-result-u32-string.wit`
+  (`option<result<u32, string>>`, two paren-using wrappers nested inside
+  each other), and `wit/record-shape-info.wit` (a `record` field whose
+  value is itself a `variant`, with a with-payload and a no-payload case)
+  - see "Nesting" below for why none of the three needed any code
+  changes.
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -97,16 +99,16 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Every WIT type-former has at least one fixture, including two nested
-  ones (`list<record>` and `option<result<u32, string>>` - see "Nesting"
-  below; nesting turned out to need no code changes at all, for either
-  combination). Not yet exercised by a fixture: three or more levels of
-  nesting in one shape, and a `variant` case or `record` field whose own
-  value is itself a `variant` - `parse`/`render` dispatch generically on
-  `Shape`/`Value` with no type-specific special-casing beyond what's
-  already confirmed, so these are expected to work unchanged too, but
-  "expected to" is exactly the kind of claim this project exists to
-  check rather than trust.
+- Every WIT type-former has at least one fixture, including three nested
+  ones (`list<record>`, `option<result<u32, string>>`, and a `record`
+  field whose value is a `variant` - see "Nesting" below; none of the
+  three needed any code changes). Not yet exercised by a fixture: three
+  or more levels of nesting in one shape, and a `variant` *case* (as
+  opposed to a record field) whose own value is itself a `variant`.
+  `parse`/`render` dispatch generically on `Shape`/`Value` with no
+  type-specific special-casing beyond what's already confirmed, so these
+  are expected to work unchanged too, but "expected to" is exactly the
+  kind of claim this project exists to check rather than trust.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -242,6 +244,17 @@ canonfuzz: running the regression suite against the component
   pass  option-result-some-err
 
 4 passed, 0 failed, 4 total
+
+== record-shape-info ==
+canonfuzz: generating guest bindings for wit/record-shape-info.wit
+canonfuzz: building the guest component with moon
+canonfuzz: turning the core module into a component with wasm-tools
+canonfuzz: running the regression suite against the component
+
+  pass  shape-info-circle
+  pass  shape-info-unknown
+
+2 passed, 0 failed, 2 total
 ```
 
 This run passes overall: every fixture except `wide-flags` builds and every
@@ -350,14 +363,27 @@ nesting was free the whole time. `canonfuzz_wbtest.mbt` checks this
 directly, and `wit/option-result-u32-string.wit` confirms it against a
 real component the same way `list-point` confirmed `list<record>`.
 
+A `record` field whose value is itself a `variant`
+(`wit/record-shape-info.wit`) needed nothing either, for the same reason
+`list<record>` didn't: `parse_wave_record` already calls `parse`
+generically on each field's own `Shape`, with no awareness of what kind
+of shape that is, so a field being a `variant` specifically was never
+special. This one is worth calling out anyway, rather than treating it
+as obvious from the `list<record>` result, because it covers a case
+`list<record>` didn't: a *no-payload* variant case as a field's value
+renders as a bare word with no parens at all, sitting directly between
+the field's `:` and the record's `,` or `}` - a different shape of text
+than anything nested-in-a-list ever produces, and `split_top_level`
+needed to get that right too.
+
 What's left is not a known architectural gap so much as an absence of
 evidence: three or more levels of nesting in one shape, and a `variant`
-case or `record` field whose value is itself a `variant`, are not
-exercised by any fixture yet. Nothing in `parse`/`render` special-cases
-depth or type-former identity, so the same reasoning says these should
-also already work - but that is exactly the kind of claim this project
-exists to check by building the fixture, not to assert from how the code
-reads.
+*case* (as opposed to a record field) whose value is itself a `variant`,
+are not exercised by any fixture yet. Nothing in `parse`/`render`
+special-cases depth or type-former identity, so the same reasoning says
+these should also already work - but that is exactly the kind of claim
+this project exists to check by building the fixture, not to assert from
+how the code reads.
 
 ## Supported environments
 
