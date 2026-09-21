@@ -1,0 +1,13 @@
+package canonfuzz:variant-in-variant@0.1.0;
+
+world canon-variant-in-variant {
+    variant shape-kind {
+        circle(f64),
+        square(f64),
+    }
+    variant maybe-shape {
+        absent,
+        present(shape-kind),
+    }
+    export echo-maybe-shape: func(v: maybe-shape) -> maybe-shape;
+}

@@ -67,10 +67,11 @@ construction rather than found by random search.
   mandatory `%` escaping for a colliding case name), and
   `wit/list-point.wit` (a `list<record>`), `wit/option-result-u32-string.wit`
   (`option<result<u32, string>>`, two paren-using wrappers nested inside
-  each other), and `wit/record-shape-info.wit` (a `record` field whose
-  value is itself a `variant`, with a with-payload and a no-payload case)
-  - see "Nesting" below for why none of the three needed any code
-  changes.
+  each other), `wit/record-shape-info.wit` (a `record` field whose
+  value is itself a `variant`, with a with-payload and a no-payload case),
+  and `wit/variant-in-variant.wit` (a `variant` *case* whose own payload
+  is itself a `variant`) - see "Nesting" below for why none of the four
+  needed any code changes.
 - `cmd/main`: a native CLI that runs the full pipeline above against every
   fixture and reports pass/fail per case, with the tool stage (codegen,
   build, componentize, or the invocation itself) called out separately
@@ -101,16 +102,16 @@ has only run on Linux and macOS - see "Supported environments" below.
 
 ## What's not implemented yet
 
-- Every WIT type-former has at least one fixture, including three nested
-  ones (`list<record>`, `option<result<u32, string>>`, and a `record`
-  field whose value is a `variant` - see "Nesting" below; none of the
-  three needed any code changes). Not yet exercised by a fixture: three
-  or more levels of nesting in one shape, and a `variant` *case* (as
-  opposed to a record field) whose own value is itself a `variant`.
-  `parse`/`render` dispatch generically on `Shape`/`Value` with no
-  type-specific special-casing beyond what's already confirmed, so these
-  are expected to work unchanged too, but "expected to" is exactly the
-  kind of claim this project exists to check rather than trust.
+- Every WIT type-former has at least one fixture, including four nested
+  ones (`list<record>`, `option<result<u32, string>>`, a `record` field
+  whose value is a `variant`, and a `variant` *case* whose own value is
+  a `variant` - see "Nesting" below; none of the four needed any code
+  changes). Not yet exercised by a fixture: three or more levels of
+  nesting in one shape. `parse`/`render` dispatch generically on
+  `Shape`/`Value` with no type-specific special-casing beyond what's
+  already confirmed, so this is expected to work unchanged too, but
+  "expected to" is exactly the kind of claim this project exists to
+  check rather than trust.
 - Resource handles are not covered (targets `wit-bindgen`#1587).
 - The corpus is hand-picked, not generated. Property-based or
   coverage-guided generation of new cases is future work, not this
@@ -376,14 +377,24 @@ the field's `:` and the record's `,` or `}` - a different shape of text
 than anything nested-in-a-list ever produces, and `split_top_level`
 needed to get that right too.
 
+A `variant` *case* whose own payload is itself a `variant`
+(`wit/variant-in-variant.wit`: `maybe-shape` has a `present(shape-kind)`
+case, where `shape-kind` is itself a two-case `variant`) needed nothing
+either, and for a reason distinct from the record-field case above: a
+case's payload goes through `parse_wave_variant`'s own `strip(text,
+label + "(", ")")`, not `parse_wave_record`'s per-field loop, so this
+was genuinely a different code path, not just the same fact restated.
+`strip` still doesn't care what's inside the parens it trims - the same
+property that made `option<result<...>>` free - so `present(circle(2.5))`
+recovers correctly with `shape-kind`'s own parens passed through
+untouched.
+
 What's left is not a known architectural gap so much as an absence of
-evidence: three or more levels of nesting in one shape, and a `variant`
-*case* (as opposed to a record field) whose value is itself a `variant`,
-are not exercised by any fixture yet. Nothing in `parse`/`render`
-special-cases depth or type-former identity, so the same reasoning says
-these should also already work - but that is exactly the kind of claim
-this project exists to check by building the fixture, not to assert from
-how the code reads.
+evidence: three or more levels of nesting in one shape is not exercised
+by any fixture yet. Nothing in `parse`/`render` special-cases depth, so
+the same reasoning says this should also already work - but that is
+exactly the kind of claim this project exists to check by building the
+fixture, not to assert from how the code reads.
 
 ## Machine-readable output
 

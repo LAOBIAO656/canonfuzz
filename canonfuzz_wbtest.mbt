@@ -671,3 +671,47 @@ test "parse recovers a record field whose value is a variant" {
     ),
   )
 }
+
+// maybe_shape_shape()/shape_kind_shape() are defined in cases.mbt and
+// reused here, since they are already exactly the shape
+// wit/variant-in-variant.wit's real cases use.
+
+///|
+/// A variant *case*'s own payload can itself be a variant - distinct
+/// from the record-field case above, since a case's payload goes through
+/// `parse_wave_variant`'s own `strip(text, label + "(", ")")`, not
+/// `parse_wave_record`'s per-field loop. Same reasoning as the nested
+/// option-of-result test: `strip` hands the inner text to `parse`
+/// unexamined regardless of the parens it contains, so
+/// `present(circle(2.5))` needs nothing new to recover correctly.
+test "parse recovers a variant case whose payload is itself a variant" {
+  let shape = maybe_shape_shape()
+  assert_true(
+    same_option(
+      parse(shape, "absent"),
+      Some(VVariant(case_name="absent", payload=None)),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(shape, "present(circle(2.5))"),
+      Some(
+        VVariant(
+          case_name="present",
+          payload=Some(VVariant(case_name="circle", payload=Some(VF64(2.5)))),
+        ),
+      ),
+    ),
+  )
+  assert_true(
+    same_option(
+      parse(shape, "present(square(-1.75))"),
+      Some(
+        VVariant(
+          case_name="present",
+          payload=Some(VVariant(case_name="square", payload=Some(VF64(-1.75)))),
+        ),
+      ),
+    ),
+  )
+}

@@ -32,6 +32,8 @@ pub fn same_option(Value?, Value?) -> Bool
 
 pub fn scalar_regression_suite() -> Array[Case]
 
+pub fn variant_in_variant_regression_suite() -> Array[Case]
+
 pub fn variant_match_result_regression_suite() -> Array[Case]
 
 pub fn wide_flags_labels() -> Array[String]

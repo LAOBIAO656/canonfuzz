@@ -125,6 +125,16 @@ fn fixtures() -> Array[Fixture] {
       cases: @canonfuzz.record_shape_info_regression_suite(),
       known_build_failure: None,
     },
+    {
+      name: "variant-in-variant",
+      wit_file: "wit/variant-in-variant.wit",
+      world: "canon-variant-in-variant",
+      echo_pkg_dir: "gen/world/canon-variant-in-variant",
+      echo_impl: VARIANT_IN_VARIANT_ECHO_IMPL,
+      work_dir: ".canonfuzz-work/variant-in-variant",
+      cases: @canonfuzz.variant_in_variant_regression_suite(),
+      known_build_failure: None,
+    },
   ]
 }
 
@@ -520,6 +530,16 @@ const RECORD_SHAPE_INFO_ECHO_IMPL =
   #|pub fn echo_shape_info(
   #|  v : @canon-record-shape-info.ShapeInfo,
   #|) -> @canon-record-shape-info.ShapeInfo {
+  #|  v
+  #|}
+  #|
+
+///|
+const VARIANT_IN_VARIANT_ECHO_IMPL =
+  #|///|
+  #|pub fn echo_maybe_shape(
+  #|  v : @canon-variant-in-variant.MaybeShape,
+  #|) -> @canon-variant-in-variant.MaybeShape {
   #|  v
   #|}
   #|

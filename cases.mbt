@@ -352,7 +352,8 @@ pub fn all_regression_suites() -> Array[Case] {
   variant_match_result_regression_suite() +
   list_point_regression_suite() +
   option_result_u32_string_regression_suite() +
-  record_shape_info_regression_suite()
+  record_shape_info_regression_suite() +
+  variant_in_variant_regression_suite()
 }
 
 ///|
@@ -729,6 +730,66 @@ pub fn record_shape_info_regression_suite() -> Array[Case] {
       expect: shape_info(2, VVariant(case_name="unknown", payload=None)),
       shape,
       note: "a no-payload variant case as a record field's value - the field's text is a bare word right next to the record's own : and }",
+    },
+  ]
+}
+
+///|
+fn maybe_shape_shape() -> Shape {
+  ShVariant([("absent", None), ("present", Some(shape_kind_shape()))])
+}
+
+///|
+/// The `wit/variant-in-variant.wit` regression corpus: a variant *case*
+/// whose own payload is itself a variant - `record-shape-info` already
+/// confirmed a record *field* can be a variant, but a case's payload
+/// goes through `parse_wave_variant`'s own `strip(text, label + "(",
+/// ")")`, not `parse_wave_record`'s per-field loop, so it is a distinct
+/// code path and was still genuinely unexercised (see "what's not
+/// implemented" in README.md before this suite existed). Expected to
+/// need nothing new, for the same reason `option<result<...>>` didn't:
+/// `strip` trims a fixed-length prefix and one-character suffix, not a
+/// matched pair of parens, so `shape-kind`'s own `(...)` inside
+/// `present(...)`'s payload text is handed to the inner `parse`
+/// unexamined. Confirmed against a real component, not just assumed.
+pub fn variant_in_variant_regression_suite() -> Array[Case] {
+  let shape = maybe_shape_shape()
+  [
+    {
+      name: "maybe-shape-absent",
+      function: "echo-maybe-shape",
+      input: VVariant(case_name="absent", payload=None),
+      expect: VVariant(case_name="absent", payload=None),
+      shape,
+      note: "the outer variant's own no-payload case",
+    },
+    {
+      name: "maybe-shape-present-circle",
+      function: "echo-maybe-shape",
+      input: VVariant(
+        case_name="present",
+        payload=Some(VVariant(case_name="circle", payload=Some(VF64(2.5)))),
+      ),
+      expect: VVariant(
+        case_name="present",
+        payload=Some(VVariant(case_name="circle", payload=Some(VF64(2.5)))),
+      ),
+      shape,
+      note: "present(circle(2.5)) - a with-payload outer case wrapping a with-payload inner case",
+    },
+    {
+      name: "maybe-shape-present-square",
+      function: "echo-maybe-shape",
+      input: VVariant(
+        case_name="present",
+        payload=Some(VVariant(case_name="square", payload=Some(VF64(-1.75)))),
+      ),
+      expect: VVariant(
+        case_name="present",
+        payload=Some(VVariant(case_name="square", payload=Some(VF64(-1.75)))),
+      ),
+      shape,
+      note: "a different inner case with a negative payload, to check the inner variant's own case selection isn't hardcoded to the first case tried",
     },
   ]
 }
